@@ -96,9 +96,14 @@ final class ToolRegistryTest extends TestCase {
         $users = $this->createMock(IUserManager::class);
         $users->method('get')->willReturn($this->createMock(IUser::class));
         foreach (\OCA\Mcp\AppInfo\Application::MODULES as $class) {
-            // Definitions are independent of constructor collaborators. Use the real catalog, replacing
-            // only schemas so this test focuses on the registry envelope rather than resource validation.
-            $definitions = (new \ReflectionClass($class))->newInstanceWithoutConstructor()->definitions();
+            // Writing definitions need no resource services. Deck's conditional read catalogue additionally
+            // needs an availability probe; this envelope contract intentionally leaves that optional API off.
+            $instance = (new \ReflectionClass($class))->newInstanceWithoutConstructor();
+            if ($instance instanceof \OCA\Mcp\Tools\Deck\DeckToolModule) {
+                (new \ReflectionProperty($instance, 'capabilities'))->setValue($instance,
+                    new \OCA\Mcp\Tools\Deck\DeckCapabilities($apps, 32));
+            }
+            $definitions = $instance->definitions();
             $module = new class($definitions) implements ToolModule {
                 public function __construct(private array $definitions) {}
                 public function definitions(): array {

@@ -1342,6 +1342,10 @@ OC.L10N.register(
     "Label changes stopped before all requested associations were confirmed. Review the current card in Deck and request a fresh plan before any further changes." : "As alterações de etiquetas pararam antes de confirmar todas as associações solicitadas. Revise o cartão atual no Deck e solicite um novo plano antes de outras alterações.",
     "Change Deck card labels" : "Alterar etiquetas do cartão do Deck",
     "Change labels on %s in %s." : "Alterar etiquetas de %s em %s.",
-    "The requested label state was observed after an error. This call may not have made that change; check the current labels before taking any further action." : "O estado solicitado das etiquetas foi observado após um erro. Esta chamada pode não ter feito essa alteração; confira as etiquetas atuais antes de qualquer outra ação."
+    "The requested label state was observed after an error. This call may not have made that change; check the current labels before taking any further action." : "O estado solicitado das etiquetas foi observado após um erro. Esta chamada pode não ter feito essa alteração; confira as etiquetas atuais antes de qualquer outra ação.",
+    "Native Deck dependency reading is unavailable on this installation." : "A leitura de dependências nativas do Deck não está disponível nesta instalação.",
+    "The readable dependency graph exceeds the traversal limits. No incomplete graph was returned." : "O grafo de dependências legível excede os limites de travessia. Nenhum grafo incompleto foi retornado.",
+    "This graph contains only readable cards. Cycles through unreadable cards cannot be detected; a visible graph does not prove that the global graph is acyclic. Native relations do not automatically block task progress." : "Este grafo contém somente cartões legíveis. Ciclos por cartões ilegíveis não são detectáveis; um grafo visível não prova que o grafo global é acíclico. As relações nativas não bloqueiam automaticamente o andamento das tarefas.",
+    "Read Deck card dependencies" : "Ler dependências do cartão do Deck"
 },
 "nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;");

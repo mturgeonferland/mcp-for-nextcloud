@@ -177,4 +177,50 @@ final class DeckReferenceBoundaryTest extends TestCase {
         $this->expectException(DeckSessionException::class);
         $gateway->listLabels('reader', 20, 50, 0);
     }
+    public function testDependencyAdjacencyUsesTheCommonReadBoundaryForReaderAndEditor(): void {
+        $this->source->setDependentCards([103, 101, 102]);
+        $stacks = $this->createMock(StackMapper::class);
+        $stacks->method('findAll')->willReturn([new Stack(['id' => 10]), new Stack(['id' => 30])]);
+        $this->services[StackMapper::class] = $stacks;
+        foreach (['reader', 'editor'] as $uid) {
+            $node = $this->gateway->dependencyNode($uid, 7);
+            self::assertSame([101], array_map(static fn (array $target): int => $target['card']->getId(), $node['targets']));
+            self::assertSame([101], $node['card']->getDependentCards());
+            self::assertSame([103, 101, 102], $this->source->getDependentCards());
+        }
+    }
+
+    public function testUncertainDependencyTargetReadDoesNotClaimACompleteAdjacency(): void {
+        $this->source->setDependentCards([104]);
+        $stacks = $this->createMock(StackMapper::class);
+        $stacks->method('findAll')->willReturn([new Stack(['id' => 10])]);
+        $this->services[StackMapper::class] = $stacks;
+        $this->expectException(\RuntimeException::class);
+        $this->gateway->dependencyNode('reader', 7);
+    }
+
+    public function testDeletedGraphSourceIsRefusedBeforeNativeServiceEnrichment(): void {
+        $this->source = new Card(['id' => 7, 'stackId' => 10, 'deletedAt' => 1]);
+        $this->services[CardService::class]->expects(self::never())->method('find');
+        $this->expectException(NoPermissionException::class);
+        $this->gateway->dependencyNode('reader', 7);
+    }
+
+    public function testHiddenNativeIdsDoNotConsumeGraphNodeEdgeOrDepthLimits(): void {
+        $this->source->setDependentCards(range(200, 400));
+        $permissions = $this->createMock(PermissionService::class);
+        $permissions->method('checkPermission')->willReturnCallback(static function ($mapper, $id): bool {
+            if ($id !== 7) { throw new NoPermissionException('hidden'); }
+            return true;
+        });
+        $this->services[PermissionService::class] = $permissions;
+        $stacks = $this->createMock(StackMapper::class);
+        $stacks->method('findAll')->willReturn([new Stack(['id' => 10])]);
+        $this->services[StackMapper::class] = $stacks;
+        $graph = (new \OCA\Mcp\Tools\Deck\DependencyGraph($this->gateway, 1, 0, 0))->read('reader', 7);
+        self::assertTrue($graph['complete']);
+        self::assertCount(1, $graph['nodes']);
+        self::assertSame([], $graph['edges']);
+    }
+
 }

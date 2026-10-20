@@ -1337,6 +1337,10 @@ OC.L10N.register(
     "Label changes stopped before all requested associations were confirmed. Review the current card in Deck and request a fresh plan before any further changes." : "Die Label-Änderungen wurden gestoppt, bevor alle angeforderten Zuordnungen bestätigt waren. Prüfen Sie die aktuelle Karte in Deck und fordern Sie vor weiteren Änderungen einen neuen Plan an.",
     "Change Deck card labels" : "Labels der Deck-Karte ändern",
     "Change labels on %s in %s." : "Labels von %s in %s ändern.",
-    "The requested label state was observed after an error. This call may not have made that change; check the current labels before taking any further action." : "Der angeforderte Label-Zustand wurde nach einem Fehler beobachtet. Dieser Aufruf hat die Änderung möglicherweise nicht vorgenommen; prüfen Sie die aktuellen Labels vor weiteren Aktionen."
+    "The requested label state was observed after an error. This call may not have made that change; check the current labels before taking any further action." : "Der angeforderte Label-Zustand wurde nach einem Fehler beobachtet. Dieser Aufruf hat die Änderung möglicherweise nicht vorgenommen; prüfen Sie die aktuellen Labels vor weiteren Aktionen.",
+    "Native Deck dependency reading is unavailable on this installation." : "Das Lesen nativer Deck-Abhängigkeiten ist auf dieser Installation nicht verfügbar.",
+    "The readable dependency graph exceeds the traversal limits. No incomplete graph was returned." : "Der lesbare Abhängigkeitsgraph überschreitet die Durchlaufgrenzen. Es wurde kein unvollständiger Graph zurückgegeben.",
+    "This graph contains only readable cards. Cycles through unreadable cards cannot be detected; a visible graph does not prove that the global graph is acyclic. Native relations do not automatically block task progress." : "Dieser Graph enthält nur lesbare Karten. Zyklen über nicht lesbare Karten können nicht erkannt werden; ein sichtbarer Graph beweist nicht, dass der globale Graph azyklisch ist. Native Beziehungen blockieren den Aufgabenfortschritt nicht automatisch.",
+    "Read Deck card dependencies" : "Abhängigkeiten der Deck-Karte lesen"
 },
 "nplurals=2; plural=(n != 1);");

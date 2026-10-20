@@ -52,6 +52,8 @@ final class DeckMessages {
 	public const PARAM_LABEL_ADD = 'Label IDs to assign incrementally, from the card board (maximum 100).';
 	public const PARAM_LABEL_REMOVE = 'Label IDs to unassign incrementally, from the card board (maximum 100).';
 
+	public const TOOL_READ_DEPENDENCIES_DESCRIPTION = 'Reads the complete outgoing native dependency subgraph reachable through readable cards. For native assignDependentCard(A,B), B appears in A.dependentCards: originId=A and targetId=B, without automatic task blocking. Nodes sorted by ID; edges sorted by originId/targetId. No pagination: at most 100 readable nodes (including root), 500 readable edges and shortest-path depth 20; refuses rather than returning an incomplete graph. Never reports hidden IDs, counts, handles or a hidden-limit indicator. Cycles through unreadable cards cannot be detected. Available only on compatible NC34/35 native APIs; exact releases proved: Deck1.18.5/1.19.0.';
+
 	/* Parameter descriptions. */
 	public const PARAM_BOARD_ID = 'Id of the Deck board.';
 	public const PARAM_STACK_ID = 'Id of the Deck list (stack).';
@@ -85,6 +87,21 @@ final class DeckMessages {
 		= ' If the resource belongs to somebody else, the agent MUST ask the user before sending confirm_shared: true.';
 
 	private function __construct() {
+	}
+
+	/** @return string Localized dependency dependenciesUnavailable message. */
+	public static function dependenciesUnavailable(): string {
+		return Translator::t('Native Deck dependency reading is unavailable on this installation.');
+	}
+
+	/** @return string Localized dependency dependencyGraphLimit message. */
+	public static function dependencyGraphLimit(): string {
+		return Translator::t('The readable dependency graph exceeds the traversal limits. No incomplete graph was returned.');
+	}
+
+	/** @return string Localized dependency dependencyGraphVisibility message. */
+	public static function dependencyGraphVisibility(): string {
+		return Translator::t('This graph contains only readable cards. Cycles through unreadable cards cannot be detected; a visible graph does not prove that the global graph is acyclic. Native relations do not automatically block task progress.');
 	}
 
 	/** @return string Localized validation rule for label ID lists. */

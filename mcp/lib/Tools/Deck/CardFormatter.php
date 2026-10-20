@@ -77,6 +77,16 @@ final class CardFormatter {
 	}
 
 	/**
+	 * @param Card $card Card whose READ and parent visibility were checked by the gateway.
+	 * @param int $boardId Its readable board.
+	 * @return array{id: int, boardId: int, title: string, url: string} Minimal reference without native counters or relations.
+	 */
+	public function reference(Card $card, int $boardId): array {
+		return ['id' => (int)$card->getId(), 'boardId' => $boardId, 'title' => (string)$card->getTitle(),
+			'url' => $this->urls->linkToRouteAbsolute(self::CARD_ROUTE, ['boardId' => $boardId, 'cardId' => $card->getId()])];
+	}
+
+	/**
 	 * @param Card $card Card as returned by the Deck services.
 	 * @param int|null $boardId Board the card belongs to, resolved once by the gateway for listings.
 	 * @return array{id: int, stackId: int, boardId: int|null, title: string, description: string, type: string, owner: string, order: int, archived: bool, done: int|null, duedate: string|null, lastModified: int, assignedUsers: list<array{uid: string, displayName: string}>, overdue: bool, url: string|null}

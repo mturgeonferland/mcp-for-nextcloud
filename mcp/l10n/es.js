@@ -1342,6 +1342,10 @@ OC.L10N.register(
     "Label changes stopped before all requested associations were confirmed. Review the current card in Deck and request a fresh plan before any further changes." : "Los cambios de etiquetas se detuvieron antes de confirmar todas las asociaciones solicitadas. Revise la tarjeta actual en Deck y solicite un nuevo plan antes de otros cambios.",
     "Change Deck card labels" : "Cambiar etiquetas de la tarjeta de Deck",
     "Change labels on %s in %s." : "Cambiar etiquetas de %s en %s.",
-    "The requested label state was observed after an error. This call may not have made that change; check the current labels before taking any further action." : "El estado solicitado de las etiquetas se observó después de un error. Puede que esta llamada no haya realizado ese cambio; compruebe las etiquetas actuales antes de realizar otra acción."
+    "The requested label state was observed after an error. This call may not have made that change; check the current labels before taking any further action." : "El estado solicitado de las etiquetas se observó después de un error. Puede que esta llamada no haya realizado ese cambio; compruebe las etiquetas actuales antes de realizar otra acción.",
+    "Native Deck dependency reading is unavailable on this installation." : "La lectura de dependencias nativas de Deck no está disponible en esta instalación.",
+    "The readable dependency graph exceeds the traversal limits. No incomplete graph was returned." : "El grafo de dependencias legible supera los límites del recorrido. No se devolvió un grafo incompleto.",
+    "This graph contains only readable cards. Cycles through unreadable cards cannot be detected; a visible graph does not prove that the global graph is acyclic. Native relations do not automatically block task progress." : "Este grafo contiene solo tarjetas legibles. No se pueden detectar ciclos a través de tarjetas ilegibles; un grafo visible no demuestra que el grafo global sea acíclico. Las relaciones nativas no bloquean automáticamente el progreso de las tareas.",
+    "Read Deck card dependencies" : "Leer dependencias de la tarjeta de Deck"
 },
 "nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;");

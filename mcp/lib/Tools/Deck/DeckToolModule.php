@@ -25,6 +25,7 @@ use OCA\Mcp\Tools\Deck\Handler\ListCardsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListLabelsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListStacksHandler;
 use OCA\Mcp\Tools\Deck\Handler\MoveCardHandler;
+use OCA\Mcp\Tools\Deck\Handler\ReadCardDependenciesHandler;
 use OCA\Mcp\Tools\Deck\Handler\ReadCardHandler;
 use OCA\Mcp\Tools\PlanState;
 use OCA\Mcp\Tools\PreviewsWrites;
@@ -42,8 +43,7 @@ use Psr\Log\LoggerInterface;
 use stdClass;
 
 /**
- * The Deck tool module: fifteen tools that read, follow up, create, edit, move and delete Deck cards, and
- * build or empty the structure around them (boards and lists).
+ * Deck card and board tools, with native dependency reads only where the compatible API exists.
  *
  * This class only declares the tools and routes a call to a handler. It holds no Deck logic and
  * resolves no Deck class at construction time, because the Deck app may not be installed: the
@@ -76,6 +76,8 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 * @param ITimeFactory $timeFactory Clock the `overdue` flag of a card is read from.
 	 * @param IUserManager|null $userManager Resolves the UID to the IUser that IAppManager::isEnabledForUser() expects.
 	 * @param IConfig|null $config Reads the caller's timezone, so due dates speak the day they see.
+	 * @param \OCP\ISession|null $session Caller binding used by the native Deck services.
+	 * @param DeckCapabilities|null $capabilities Optional native capability probe; default reads current installation.
 	 */
 	public function __construct(
 		private ContainerInterface $container,
@@ -86,6 +88,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		private ?IUserManager $userManager = null,
 		private ?IConfig $config = null,
 		private ?\OCP\ISession $session = null,
+		private ?DeckCapabilities $capabilities = null,
 	) {
 	}
 
@@ -97,7 +100,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 * @return list<string>
 	 */
 	public function guideNotes(): array {
-		return [
+		$notes = [
 			'deck_edit_card_labels changes only add/remove label IDs on a card, preserving all other labels. '
 				. 'Use deck_list_labels on its board first. Preview before confirm and repeat plan_state; a changed state needs a new approval.',
 			'A card is addressed by three ids: deck_list_boards gives the board, deck_list_stacks the lists of a '
@@ -122,6 +125,10 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 			'deck_move_card only changes the position inside the list of the card; moving it to another list or another '
 				. 'board is not something this module does.',
 		];
+		if ($this->dependencyCapabilities()->dependencies()) {
+			$notes[] = DeckMessages::TOOL_READ_DEPENDENCIES_DESCRIPTION;
+		}
+		return $notes;
 	}
 
 	/**
@@ -133,7 +140,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 * @return list<array{name: string, description: string, inputSchema: array<string, mixed>, module: string, operation: string, app: string}>
 	 */
 	public function definitions(): array {
-		return [
+		$definitions = [
 			[
 				'name' => ListBoardsHandler::TOOL,
 				'description' => DeckMessages::TOOL_LIST_BOARDS_DESCRIPTION,
@@ -388,6 +395,15 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				'app' => self::DECK_APP,
 			],
 		];
+		if ($this->dependencyCapabilities()->dependencies()) {
+			$definitions[] = [
+				'name' => ReadCardDependenciesHandler::TOOL,
+				'description' => DeckMessages::TOOL_READ_DEPENDENCIES_DESCRIPTION,
+				'inputSchema' => $this->schema(['cardId' => $this->integer(DeckMessages::PARAM_CARD_ID)], ['cardId']),
+				'module' => self::MODULE, 'operation' => 'read', 'app' => self::DECK_APP,
+			];
+		}
+		return $definitions;
 	}
 
 	/**
@@ -400,6 +416,9 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 * @throws InvalidArgumentException For an unknown tool or when the Deck app is unavailable, mapped to -32602.
 	 */
 	public function call(string $name, array $arguments, string $userId): array {
+		if ($name === ReadCardDependenciesHandler::TOOL && !$this->dependencyCapabilities()->dependencies()) {
+			throw new InvalidArgumentException(DeckMessages::dependenciesUnavailable());
+		}
 		$handler = $this->handlerFor($name, $userId);
 		if ($handler === null) {
 			throw new InvalidArgumentException(DeckMessages::errorUnknownTool());
@@ -849,6 +868,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 			ListStacksHandler::TOOL => new ListStacksHandler($this->gateway(), $this->logger, $formatter),
 			ListCardsHandler::TOOL => new ListCardsHandler($this->gateway(), $this->logger, $formatter),
 			FollowupCardsHandler::TOOL => new FollowupCardsHandler($this->gateway(), $this->logger, $formatter),
+			ReadCardDependenciesHandler::TOOL => new ReadCardDependenciesHandler($this->gateway(), $this->logger, $formatter),
 			ReadCardHandler::TOOL => new ReadCardHandler($this->gateway(), $this->logger, $formatter),
 			CreateCardHandler::TOOL => new CreateCardHandler($this->gateway(), $this->logger, $formatter),
 			EditCardHandler::TOOL => new EditCardHandler($this->gateway(), $this->logger, $formatter),
@@ -877,6 +897,11 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 */
 	private function formatter(string $userId): CardFormatter {
 		return new CardFormatter($this->urlGenerator, $this->timeFactory, $this->userManager, $this->zones()?->forUser($userId));
+	}
+
+	/** @return DeckCapabilities Fresh version/native-shape gate, with no Deck DI resolution. */
+	private function dependencyCapabilities(): DeckCapabilities {
+		return $this->capabilities ??= new DeckCapabilities($this->appManager);
 	}
 
 	/**

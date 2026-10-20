@@ -209,6 +209,50 @@ switch ($action) {
             'references' => count($card->getDependentCards() ?? []),
             'statements' => $log === null ? null : count($log->statementsBetween($pid, $begin, $end))];
         break;
+    case 'dependency-seed':
+        if (method_exists($cards, 'assignDependentCard')) {
+            $cards->assignDependentCard($in['a'], $in['b']);
+            $cards->assignDependentCard($in['a'], $in['privateCard']);
+        }
+        $out = ['nativeAvailable' => method_exists($cards, 'assignDependentCard')];
+        break;
+    case 'dependency-private-access':
+        foreach ([F::READER, F::EDITOR] as $participant) {
+            if ($in['allow']) {
+                $boards->addAcl($in['privateBoard'], 0, $participant, false, false, false);
+            } else {
+                foreach ($boards->find($in['privateBoard'])->getAcl() as $acl) {
+                    if ($acl->getParticipant() === $participant) { $boards->deleteAcl($acl->getId()); }
+                }
+            }
+        }
+        $out = ['updated' => true];
+        break;
+    case 'dependency-hide-remove':
+        $cards->removeDependentCard($in['a'], $in['privateCard']);
+        $out = ['removed' => true];
+        break;
+    case 'dependency-cycle':
+        $cards->assignDependentCard($in['b'], $in['a']);
+        $out = ['cycle' => true];
+        break;
+    case 'dependency-read':
+        $module = new OCA\Mcp\Tools\Deck\DeckToolModule(OC::$server, $apps, Server::get(Psr\Log\LoggerInterface::class),
+            Server::get(OCP\IURLGenerator::class), Server::get(OCP\AppFramework\Utility\ITimeFactory::class),
+            Server::get(OCP\IUserManager::class), Server::get(OCP\IConfig::class), Server::get(OCP\ISession::class));
+        $policy = Server::get(OCA\Mcp\Service\GrantPolicy::class);
+        $policy->setGrant($uid, 'deck', 'read', $in['grant'] ?? true);
+        $registry = new OCA\Mcp\Tools\ToolRegistry([$module], $policy, $apps, Server::get(OCP\IUserManager::class),
+            Server::get(Psr\Log\LoggerInterface::class));
+        $out = ['tools' => array_column($registry->list($uid), 'name')];
+        try {
+            $out['result'] = $registry->call('deck_read_card_dependencies', ['cardId' => $in['cardId']], $uid);
+        } catch (InvalidArgumentException $e) { $out['refused'] = true; }
+        if ((int)getenv('MCP_IT_NC') < 34) {
+            try { $module->call('deck_read_card_dependencies', ['cardId' => $in['cardId']], $uid); }
+            catch (InvalidArgumentException $e) { $out['directRefused'] = true; }
+        }
+        break;
     case 'mcp-labels':
         $module = new OCA\Mcp\Tools\Deck\DeckToolModule(OC::$server, $apps, Server::get(Psr\Log\LoggerInterface::class),
             Server::get(OCP\IURLGenerator::class), Server::get(OCP\AppFramework\Utility\ITimeFactory::class),

@@ -871,14 +871,35 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		return array_values($boardMapper->findAllByOwner($userId) ?: []);
 	}
 
+	/** {@inheritDoc} CardService::find enriches the native outgoing IDs on Deck v1.18.5/v1.19.0. */
+	public function dependencyNode(string $userId, int $cardId): array {
+		if (!property_exists(Card::class, 'dependentCards') || !method_exists(CardService::class, 'assignDependentCard')) {
+			throw new DeckRefusalException(DeckMessages::dependenciesUnavailable());
+		}
+		$view = [];
+		$source = $this->referenceTarget($userId, $cardId, $view);
+		if ($source === null) {
+			throw new NoPermissionException('Permission denied');
+		}
+		$targets = [];
+		$card = $this->filterCardReferences($userId, $this->service(CardService::class)->find($cardId), $view, true, $targets);
+		usort($targets, static fn (array $a, array $b): int => $a['card']->getId() <=> $b['card']->getId());
+		return ['card' => $card, 'boardId' => $source['boardId'], 'targets' => $targets];
+	}
+
 	/**
-	 * Single boundary for every Card returned by this gateway (including verification and embedded cards).
-	 * The public formatter remains a whitelist: this does not publish a dependency tool or raw native objects.
-	 * No denied/failed/deleted target produces an ID, count or marker. Never recurse through target relations.
-	 * The optional view belongs to a single public call, shared by its cards; no property retains it.
+	 * Single reference boundary for every Card returned by this gateway. Hidden/deleted targets have no marker.
+	 * The optional view belongs to this public operation only; no property retains it across calls.
+	 * @param string $userId Authenticated caller.
+	 * @param Card $card Source card, whose READ has already been checked.
+	 * @param array|null $view Parent listings memoized inside one public call.
+	 * @param bool $strict True for graph reads: uncertain DB/DI failures abort instead of claiming completeness.
+	 * @param array|null $targets Receives fresh readable target cards and board IDs; never raw hidden IDs.
+	 * @return Card Card with only readable native references, without poisoning a cached native entity.
+	 * @throws \Throwable In strict mode for an uncertain lookup.
 	 */
-	private function filterCardReferences(string $userId, Card $card, ?array &$view = null): Card {
-		// NC32/33 entities have no dependentCards property; do not call a missing magic getter.
+	private function filterCardReferences(string $userId, Card $card, ?array &$view = null,
+		bool $strict = false, ?array &$targets = null): Card {
 		if (!property_exists($card, 'dependentCards')) {
 			return $card;
 		}
@@ -890,37 +911,57 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		$readable = [];
 		foreach (array_unique($ids) as $id) {
 			try {
-				$boards = $this->bindUser($userId); // clears native permission cache before each target
-				$mapper = $this->service(CardMapper::class);
-				$this->service(PermissionService::class)->checkPermission($mapper, (int)$id, Acl::PERMISSION_READ);
-				$target = $mapper->find((int)$id, false); // fresh query, not an entity cache
-				if ($target->getDeletedAt() !== 0) {
-					continue;
-				}
-				// Memoize only parent listings inside this public operation. READ and find above never use this view.
-				$view['boards'] ??= array_fill_keys(array_map(
-					static fn (Board $board): int => (int)$board->getId(),
-					array_filter($boards->findAll(self::FRESH_BOARD_SINCE, false, true),
-						static fn (Board $board): bool => $board->getDeletedAt() === 0),
-				), true);
-				$boardId = $mapper->findBoardId((int)$id);
-				if (!isset($view['boards'][$boardId])) {
-					continue;
-				}
-				$view['stacks'][$boardId] ??= array_fill_keys(array_map(
-					static fn (Stack $stack): int => (int)$stack->getId(),
-					$this->service(StackMapper::class)->findAll($boardId),
-				), true);
-				if (isset($view['stacks'][$boardId][(int)$target->getStackId()])) {
+				$target = $this->referenceTarget($userId, (int)$id, $view);
+				if ($target !== null) {
 					$readable[] = (int)$id;
+					if ($targets !== null) {
+						$targets[] = $target;
+					}
 				}
-			} catch (\Throwable) {
-				// Includes resolution/DB errors: fail closed without disclosing the destination or a hidden total.
+			} catch (NoPermissionException|\OCP\AppFramework\Db\DoesNotExistException) {
+				// A denied/missing/deleted target never becomes an edge, count or handle, for any role.
+			} catch (\Throwable $e) {
+				if ($strict) {
+					throw $e;
+				}
+				// Existing card readers remain fail closed: no failed destination is serialized.
 			}
 		}
 		$card = clone $card;
 		$card->setDependentCards(array_values(array_unique($readable)));
 		return $card;
+	}
+
+	/**
+	 * @param string $userId Authenticated caller; native permissions are refreshed on every target.
+	 * @param int $id Candidate card ID from the native adjacency, never an ACL bypass query.
+	 * @param array $view Fresh parent listings shared only inside one public operation.
+	 * @return array{card: Card, boardId: int}|null A readable card with active parents, or a deleted/missing parent.
+	 * @throws \Throwable When READ is denied or lookup fails; the caller distinguishes denial from uncertainty.
+	 */
+	private function referenceTarget(string $userId, int $id, array &$view): ?array {
+		$boards = $this->bindUser($userId);
+		$mapper = $this->service(CardMapper::class);
+		$this->service(PermissionService::class)->checkPermission($mapper, $id, Acl::PERMISSION_READ);
+		$target = $mapper->find($id, false);
+		if ($target->getDeletedAt() !== 0) {
+			return null;
+		}
+		$view['boards'] ??= array_fill_keys(array_map(
+			static fn (Board $board): int => (int)$board->getId(),
+			array_filter($boards->findAll(self::FRESH_BOARD_SINCE, false, true),
+				static fn (Board $board): bool => $board->getDeletedAt() === 0),
+		), true);
+		$boardId = $mapper->findBoardId($id);
+		if (!isset($view['boards'][$boardId])) {
+			return null;
+		}
+		$view['stacks'][$boardId] ??= array_fill_keys(array_map(
+			static fn (Stack $stack): int => (int)$stack->getId(),
+			$this->service(StackMapper::class)->findAll($boardId),
+		), true);
+		return isset($view['stacks'][$boardId][(int)$target->getStackId()])
+			? ['card' => $target, 'boardId' => (int)$boardId] : null;
 	}
 
 	/**

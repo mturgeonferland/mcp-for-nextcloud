@@ -128,6 +128,7 @@ final class ToolPresentation {
             'deck_list_labels' => Translator::t('List Deck labels'),
             'deck_edit_card_labels' => Translator::t('Change Deck card labels'),
             'deck_list_cards' => Translator::t('List Deck cards'),
+            'deck_read_card_dependencies' => Translator::t('Read Deck card dependencies'),
             'deck_read_card' => Translator::t('Read Deck card'),
             'deck_create_card' => Translator::t('Create card in Deck'),
             'deck_edit_card' => Translator::t('Edit Deck card'),

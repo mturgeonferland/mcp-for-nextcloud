@@ -29,6 +29,16 @@ interface DeckGatewayInterface {
 	public function listBoards(string $userId): array;
 
 	/**
+	 * Reads one native outgoing adjacency after fresh source and target READ checks using the common boundary.
+	 * @param string $userId Authenticated caller.
+	 * @param int $cardId Source card, including archived cards still readable in Deck.
+	 * @return array{card: Card, boardId: int, targets: list<array{card: Card, boardId: int}>} Only readable targets, ordered by ID.
+	 * @throws \Throwable For an unreadable source or uncertain lookup; never returns a partial accessible adjacency.
+	 */
+	public function dependencyNode(string $userId, int $cardId): array;
+
+
+	/**
 	 * Fresh editable card, active parents and board-local labels. Inherited foreign links remain internal.
 	 * @param string $userId Authenticated caller.
 	 * @param int $cardId Card to read after READ+EDIT checks.

@@ -29,6 +29,12 @@ interface DeckGatewayInterface {
 	public function listBoards(string $userId): array;
 
 	/**
+	 * Labels of a readable board, with pagination applied after the READ check.
+	 * @return list<\OCA\Deck\Db\Label> Labels in the native mapper order.
+	 */
+	public function listLabels(string $userId, int $boardId, int $limit, int $offset): array;
+
+	/**
 	 * Stacks of one board, with their cards embedded by the Deck service.
 	 *
 	 * @param string $userId UID of the authenticated caller.
@@ -59,7 +65,8 @@ interface DeckGatewayInterface {
 	 * The deck has no such query, so the gateway walks the boards the caller may manage (owner or
 	 * `PERMISSION_MANAGE`), reads their stacks and cards in batch, and filters with
 	 * {@see CardCriteria} while it goes: a board costs four queries plus one permission lookup and
-	 * a card never costs a query of its own. At most 100 visible boards are examined, and
+	 * a plain card costs no query of its own. Native references, when present, require fresh target
+	 * checks. At most 100 visible boards are examined, and
 	 * `truncated` reports both a scan cut short by the limit and one cut short by that board
 	 * ceiling.
 	 *
@@ -83,7 +90,7 @@ interface DeckGatewayInterface {
 	): array;
 
 	/**
-	 * One card, with attachments and counters enriched by the Deck.
+	 * One card with references filtered for the caller; native file counts are not public.
 	 *
 	 * @param string $userId UID of the authenticated caller.
 	 * @param int $cardId Card to read.

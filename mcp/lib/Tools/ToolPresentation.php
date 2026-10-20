@@ -125,6 +125,7 @@ final class ToolPresentation {
             // Deck
             'deck_list_boards' => Translator::t('List Deck boards'),
             'deck_list_stacks' => Translator::t('List Deck lists'),
+            'deck_list_labels' => Translator::t('List Deck labels'),
             'deck_list_cards' => Translator::t('List Deck cards'),
             'deck_read_card' => Translator::t('Read Deck card'),
             'deck_create_card' => Translator::t('Create card in Deck'),

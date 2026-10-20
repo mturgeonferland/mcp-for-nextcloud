@@ -282,6 +282,7 @@ OC.L10N.register(
     "List Deck boards" : "Deck-Boards auflisten",
     "List Deck cards" : "Deck-Karten auflisten",
     "List Deck lists" : "Deck-Listen auflisten",
+    "List Deck labels" : "Deck-Labels auflisten",
     "List events" : "Ereignisse auflisten",
     "List file versions" : "Dateiversionen auflisten",
     "List files" : "Dateien auflisten",

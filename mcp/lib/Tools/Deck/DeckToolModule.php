@@ -20,6 +20,7 @@ use OCA\Mcp\Tools\Deck\Handler\EditCardHandler;
 use OCA\Mcp\Tools\Deck\Handler\FollowupCardsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListBoardsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListCardsHandler;
+use OCA\Mcp\Tools\Deck\Handler\ListLabelsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListStacksHandler;
 use OCA\Mcp\Tools\Deck\Handler\MoveCardHandler;
 use OCA\Mcp\Tools\Deck\Handler\ReadCardHandler;
@@ -39,7 +40,7 @@ use Psr\Log\LoggerInterface;
 use stdClass;
 
 /**
- * The Deck tool module: thirteen tools that read, follow up, create, edit, move and delete Deck cards, and
+ * The Deck tool module: fourteen tools that read, follow up, create, edit, move and delete Deck cards, and
  * build or empty the structure around them (boards and lists).
  *
  * This class only declares the tools and routes a call to a handler. It holds no Deck logic and
@@ -82,6 +83,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		private ITimeFactory $timeFactory,
 		private ?IUserManager $userManager = null,
 		private ?IConfig $config = null,
+		private ?\OCP\ISession $session = null,
 	) {
 	}
 
@@ -132,6 +134,18 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				'name' => ListBoardsHandler::TOOL,
 				'description' => DeckMessages::TOOL_LIST_BOARDS_DESCRIPTION,
 				'inputSchema' => $this->emptySchema(),
+				'module' => self::MODULE,
+				'operation' => 'read',
+				'app' => self::DECK_APP,
+			],
+			[
+				'name' => ListLabelsHandler::TOOL,
+				'description' => DeckMessages::TOOL_LIST_LABELS_DESCRIPTION,
+				'inputSchema' => $this->schema([
+					'boardId' => $this->integer(DeckMessages::PARAM_BOARD_ID),
+					'limit' => $this->integer(DeckMessages::PARAM_LABEL_LIMIT, 1, 200, ListLabelsHandler::DEFAULT_LIMIT),
+					'offset' => $this->integer(DeckMessages::PARAM_LABEL_OFFSET, 0),
+				], ['boardId']),
 				'module' => self::MODULE,
 				'operation' => 'read',
 				'app' => self::DECK_APP,
@@ -810,6 +824,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		$formatter = $this->formatter($userId);
 
 		return match ($name) {
+			ListLabelsHandler::TOOL => new ListLabelsHandler($this->gateway(), $this->logger),
 			ListBoardsHandler::TOOL => new ListBoardsHandler($this->gateway(), $this->logger, $formatter),
 			ListStacksHandler::TOOL => new ListStacksHandler($this->gateway(), $this->logger, $formatter),
 			ListCardsHandler::TOOL => new ListCardsHandler($this->gateway(), $this->logger, $formatter),
@@ -841,7 +856,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 * @return DeckGatewayInterface Gateway that resolves Deck services through the container.
 	 */
 	private function gateway(): DeckGatewayInterface {
-		return $this->gateway ??= new DeckServiceGateway($this->container, $this->timeFactory, $this->zones());
+		return $this->gateway ??= new DeckServiceGateway($this->container, $this->timeFactory, $this->zones(), $this->session);
 	}
 
 	/**

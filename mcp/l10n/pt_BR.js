@@ -412,6 +412,7 @@ OC.L10N.register(
     "List Deck boards" : "Listar quadros do Deck",
     "List Deck cards" : "Listar cards do Deck",
     "List Deck lists" : "Listar listas do Deck",
+    "List Deck labels" : "Listar etiquetas do Deck",
     "List events" : "Listar eventos",
     "List file versions" : "Listar versões do arquivo",
     "List files" : "Listar arquivos",

@@ -47,6 +47,21 @@ final class DeckTranslationTest extends TestCase {
 		Translator::reset();
 	}
 
+	public function testLabelMetadataStaysEnglishAndTheHumanTitleIsTranslated(): void {
+		// MCP descriptions/parameters are model-facing English, as required by ToolPresentation::INSTRUCTIONS.
+		self::assertSame([
+			'Lists the labels available on a readable Deck board, with their IDs, titles and colours.',
+			'Maximum number of labels to return.',
+			'Number of labels to skip.',
+		], [DeckMessages::TOOL_LIST_LABELS_DESCRIPTION, DeckMessages::PARAM_LABEL_LIMIT, DeckMessages::PARAM_LABEL_OFFSET]);
+		foreach (['en', 'pt_BR', 'es', 'de'] as $language) {
+			Translator::use(new JsonL10n($language));
+			$title = \OCA\Mcp\Tools\ToolPresentation::title('deck_list_labels');
+			if ($language === 'en') { self::assertSame('List Deck labels', $title); }
+			else { self::assertNotSame('List Deck labels', $title, $language); }
+		}
+	}
+
 	public function testPortugueseUserGetsTheSameTextsAsBefore(): void {
 		Translator::use(new JsonL10n('pt_BR'));
 		foreach (self::PORTUGUESE as $method => $text) {

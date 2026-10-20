@@ -32,6 +32,10 @@ final class DeckFixture {
         if ($status !== 0) {
             throw new RuntimeException("Deck fixture $uid / $action failed ($status): $errors $output");
         }
-        return json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        try {
+            return json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new RuntimeException("Deck fixture $uid / $action returned invalid JSON: $errors $output", 0, $e);
+        }
     }
 }

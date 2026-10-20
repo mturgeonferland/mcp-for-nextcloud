@@ -48,7 +48,7 @@ function labelIds(object $card): array {
     $ids = array_map(fn ($l) => (int)$l->getId(), $card->getLabels()); sort($ids); return $ids;
 }
 function dependentIds(object $card): array {
-    $ids = $card->getDependentCards(); sort($ids); return $ids;
+    $ids = $card->getDependentCards() ?? []; sort($ids); return $ids;
 }
 function cardReadable(CardService $cards, int $id): bool {
     try { $cards->find($id); return true; }
@@ -84,6 +84,7 @@ switch ($action) {
         $out['b'] = $cards->create('Development', $stack->getId(), 'plain', 1, $uid)->getId();
         $private = $boards->create('Private ' . $suffix, $uid, '880000');
         $privateStack = $stacks->create('Private', $private->getId(), 0);
+        $out['privateBoard'] = $private->getId();
         $out['privateCard'] = $cards->create('Private reference', $privateStack->getId(), 'plain', 0, $uid)->getId();
         $out['foreignLabel'] = $labels->create('Other board', '880000', $private->getId())->getId();
         $out['keep'] = $labels->create('Keep', '008800', $board->getId())->getId();
@@ -122,6 +123,91 @@ switch ($action) {
         }
         $out['files'] = array_map(fn ($n) => ['id' => $n->getId(), 'hash' => hash('sha256', $n->getContent())],
             $root->getUserFolder($uid)->getById($in['fileId']));
+        break;
+    case 'empty-label-board':
+        $empty = $boards->create('Empty labels ' . bin2hex(random_bytes(4)), $uid, '008800');
+        foreach ($boards->find($empty->getId())->getLabels() as $label) { $labels->delete($label->getId()); }
+        $boards->addAcl($empty->getId(), 0, F::READER, false, false, false);
+        $boards->addAcl($empty->getId(), 0, F::EDITOR, false, false, false);
+        $out = ['emptyBoard' => $empty->getId()];
+        break;
+    case 'manage-source':
+        foreach ($boards->find($in['board'])->getAcl() as $acl) {
+            if (in_array($acl->getParticipant(), [F::READER, F::EDITOR], true)) {
+                $boards->updateAcl($acl->getId(), $acl->getParticipant() === F::EDITOR, false, true);
+            }
+        }
+        $out = ['managed' => true];
+        break;
+    case 'trash-reference':
+        $cards->delete($in['privateCard']);
+        $out = ['trashed' => true];
+        break;
+    case 'mcp-observe':
+        $gateway = new OCA\Mcp\Tools\Deck\DeckServiceGateway(OC::$server,
+            Server::get(OCP\AppFramework\Utility\ITimeFactory::class), null, Server::get(OCP\ISession::class));
+        $module = new OCA\Mcp\Tools\Deck\DeckToolModule(OC::$server, $apps, Server::get(Psr\Log\LoggerInterface::class),
+            Server::get(OCP\IURLGenerator::class), Server::get(OCP\AppFramework\Utility\ITimeFactory::class),
+            Server::get(OCP\IUserManager::class), Server::get(OCP\IConfig::class), Server::get(OCP\ISession::class));
+        $source = $gateway->findCard($uid, $in['a']);
+        $out = ['privateReadable' => cardReadable($cards, $in['privateCard']), 'nativeReferences' =>
+            method_exists($cards, 'assignDependentCard') ? dependentIds($cards->find($in['a'])) : []];
+        $out['references'] = [];
+        $record = function (string $name, $card) use (&$out, $cards): void {
+            $out['references'][$name] = method_exists($cards, 'assignDependentCard') ? dependentIds($card) : [];
+        };
+        $record('read', $source);
+        foreach ($gateway->listCards($uid, $in['stack'], 50, 0)['items'] as $card) {
+            if ($card->getId() === $in['a']) { $record('list', $card); }
+        }
+        foreach ($gateway->listStacks($uid, $in['board']) as $stack) {
+            foreach ($stack->getCards() ?? [] as $card) {
+                if ($card->getId() === $in['a']) { $record('stack', $card); }
+            }
+        }
+        foreach ($gateway->followupCards($uid, 'all', $in['board'], null, null, 50)['items'] as $entry) {
+            if ($entry['card']->getId() === $in['a']) { $record('followup', $entry['card']); }
+        }
+        $calls = ['deck_read_card' => ['cardId' => $in['a']], 'deck_list_cards' => ['stackId' => $in['stack']],
+            'deck_list_stacks' => ['boardId' => $in['board']], 'deck_followup_cards' => ['status' => 'all', 'boardId' => $in['board']],
+            'deck_list_labels' => ['boardId' => $in['board'], 'limit' => 1, 'offset' => 0]];
+        foreach ($calls as $name => $args) { $out['tools'][$name] = $module->call($name, $args, $uid); }
+        $out['emptyBoardLabels'] = $module->call('deck_list_labels', ['boardId' => $in['emptyBoard']], $uid);
+        $out['emptyLabels'] = $module->call('deck_list_labels', ['boardId' => $in['board'], 'limit' => 1, 'offset' => 999], $uid);
+        $out['deniedLabels'] = $module->call('deck_list_labels', ['boardId' => $in['privateBoard']], $uid);
+        $out['missingLabels'] = $module->call('deck_list_labels', ['boardId' => 2147483647], $uid);
+        if ($uid !== F::READER) {
+            $out['preview'] = $module->preview('deck_edit_card', ['cardId' => $in['a'], 'description' => 'Revised'], $uid);
+            $record('update', $gateway->updateCard($uid, $source, $source->getTitle(), 'Revised', null));
+            $record('move', $gateway->moveCard($uid, $in['a'], $in['stack'], 0));
+            $record('state', $gateway->cardState($uid, $in['a']));
+            $out['write'] = $module->call('deck_edit_card', ['cardId' => $in['a'], 'description' => 'Revised again', 'confirm_shared' => true], $uid);
+        }
+        break;
+    case 'cost-seed':
+        $out = ['targets' => 40];
+        if (!method_exists($cards, 'assignDependentCard')) { throw new RuntimeException('Native dependencies required for cost proof'); }
+        for ($i = 0; $i < 8; $i++) { $boards->create('Cost background ' . bin2hex(random_bytes(4)), $uid, '008800'); }
+        for ($i = 0; $i < $out['targets']; $i++) {
+            $target = $cards->create('Cost target ' . $i, $in['stack'], 'plain', $i + 2, $uid);
+            $cards->assignDependentCard($in['a'], $target->getId());
+        }
+        $out['boards'] = count($boards->findAll(-2, false, true));
+        break;
+    case 'cost-read':
+        $gateway = new OCA\Mcp\Tools\Deck\DeckServiceGateway(OC::$server,
+            Server::get(OCP\AppFramework\Utility\ITimeFactory::class), null, Server::get(OCP\ISession::class));
+        $log = OCA\Mcp\Tests\Integration\Support\PostgresQueryLog::fromEnvironment();
+        $connection = Server::get(OCP\IDBConnection::class);
+        $pid = $log?->backendPid($connection);
+        $begin = $log?->mark($connection, 'deck-cost-begin');
+        $started = hrtime(true);
+        $card = $gateway->findCard($uid, $in['a']);
+        $elapsed = (hrtime(true) - $started) / 1_000_000;
+        $end = $log?->mark($connection, 'deck-cost-end');
+        $out = ['elapsed_ms' => round($elapsed, 3), 'peak_php_bytes' => memory_get_peak_usage(true),
+            'references' => count($card->getDependentCards() ?? []),
+            'statements' => $log === null ? null : count($log->statementsBetween($pid, $begin, $end))];
         break;
     case 'labels':
         $out['available'] = array_map(fn ($l) => (int)$l->getId(), $boards->find($in['board'])->getLabels());

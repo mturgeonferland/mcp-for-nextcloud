@@ -20,12 +20,14 @@ final class DeckMessages {
 	/* Tool descriptions, exposed to MCP clients in tools/list. */
 	public const TOOL_LIST_BOARDS_DESCRIPTION
 		= 'Lists the Deck boards shared with you, excluding archived ones.';
+	public const TOOL_LIST_LABELS_DESCRIPTION
+		= 'Lists the labels available on a readable Deck board, with their IDs, titles and colours.';
 	public const TOOL_LIST_STACKS_DESCRIPTION
 		= 'Lists the lists (stacks) of a Deck board, with the number of cards in each.';
 	public const TOOL_LIST_CARDS_DESCRIPTION
 		= 'Lists the active cards of a Deck list (stack), paginated.';
 	public const TOOL_READ_CARD_DESCRIPTION
-		= 'Reads a Deck card with its description, dates and counters.';
+		= 'Reads a Deck card with its description and dates.';
 	public const TOOL_CREATE_CARD_DESCRIPTION
 		= 'Creates a Deck card at the end of a list (stack), owned by you. Optional assignees are account IDs with access to the board; use users_search to resolve IDs. If assignment fails after creation, the created card is returned with a warning.';
 	public const TOOL_EDIT_CARD_DESCRIPTION
@@ -60,6 +62,8 @@ final class DeckMessages {
 	public const PARAM_DESCRIPTION = 'Card description, in plain text.';
 	public const PARAM_DUEDATE = 'Due date in YYYY-MM-DD format, or null to remove it.';
 	public const PARAM_LIMIT = 'Maximum number of cards to return.';
+	public const PARAM_LABEL_LIMIT = 'Maximum number of labels to return.';
+	public const PARAM_LABEL_OFFSET = 'Number of labels to skip.';
 	public const PARAM_OFFSET = 'Number of cards to skip, for pagination.';
 	public const PARAM_ORDER = 'Position of the card in the list, from 0 to 99999.';
 	public const PARAM_LAST_MODIFIED = 'lastModified of the card at the time it was read; if it has changed, the edit is refused.';

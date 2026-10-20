@@ -282,6 +282,17 @@ final class NextcloudApiUsage {
         ],
         // Deck 1.18 (Nextcloud 34) gave cards a start date and a colour, and CardService::update() clears both when they
         // are left out. Up to 1.17 the update ends at `done`, so there is nothing to send back.
+        // Dependencies are native only since Deck 1.18. The boundary returns the original Card on older entities.
+        'OCA\\Deck\\Db\\Card::getDependentCards' => [
+            'missing' => ['31', '32', '33'],
+            'fallback' => 'OCA\\Deck\\Db\\Card::getId',
+            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+        ],
+        'OCA\\Deck\\Db\\Card::setDependentCards' => [
+            'missing' => ['31', '32', '33'],
+            'fallback' => 'OCA\\Deck\\Db\\Card::getId',
+            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+        ],
         'OCA\\Deck\\Db\\Card::getStartdate' => [
             'missing' => ['31', '32', '33'],
             'fallback' => 'OCA\\Deck\\Service\\CardService::update',
@@ -291,7 +302,10 @@ final class NextcloudApiUsage {
             'missing' => ['31', '32', '33'],
             'fallback' => 'OCA\\Deck\\Service\\CardService::update',
             'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
-            'elsewhere' => ['Tools/Deck/CardFormatter.php' => 'OCA\\Deck\\Db\\Board::getColor'],
+            'elsewhere' => [
+                'Tools/Deck/CardFormatter.php' => 'OCA\\Deck\\Db\\Board::getColor',
+                'Tools/Deck/Handler/ListLabelsHandler.php' => 'OCA\\Deck\\Db\\Label::getColor',
+            ],
         ],
         // Up to Talk 23 Room::getLobbyState() opens a lobby whose timer has passed by itself.
         'OCA\\Talk\\Service\\RoomService::validateLobbyTimer' => [

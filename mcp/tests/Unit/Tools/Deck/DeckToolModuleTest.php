@@ -114,13 +114,20 @@ final class DeckToolModuleTest extends TestCase {
 		self::assertStringContainsString('unassign', $definition['description']);
 	}
 
+	public function testLabelSchemaAndHandlerShareTheDefaultLimit(): void {
+		$schema = $this->definitionOf('deck_list_labels')['inputSchema'];
+		self::assertSame(\OCA\Mcp\Tools\Deck\Handler\ListLabelsHandler::DEFAULT_LIMIT,
+			$schema['properties']['limit']['default']);
+	}
+
 	public function testImplementsTheModuleContract(): void {
 		self::assertInstanceOf(ToolModule::class, $this->module);
 	}
 
-	public function testDeclaresTheThirteenToolsInTheDeclaredOrder(): void {
+	public function testDeclaresTheFourteenToolsInTheDeclaredOrder(): void {
 		self::assertSame([
 			'deck_list_boards',
+			'deck_list_labels',
 			'deck_list_stacks',
 			'deck_list_cards',
 			'deck_read_card',
@@ -150,6 +157,7 @@ final class DeckToolModuleTest extends TestCase {
 	public static function operationProvider(): array {
 		return [
 			'list boards' => [ListBoardsHandler::TOOL, 'read'],
+			'list labels' => ['deck_list_labels', 'read'],
 			'list stacks' => [ListStacksHandler::TOOL, 'read'],
 			'list cards' => [ListCardsHandler::TOOL, 'read'],
 			'read card' => [ReadCardHandler::TOOL, 'read'],

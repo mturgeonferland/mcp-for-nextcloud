@@ -14,8 +14,8 @@ use Psr\Log\LoggerInterface;
 /**
  * Backs `deck_read_card`.
  *
- * `CardService::find()` checks read access, refuses a deleted card and enriches the card with its
- * attachments and counters, so the handler only formats it.
+ * `CardService::find()` checks read access and refuses a deleted card. The gateway filters native
+ * card references; the formatter exposes only its whitelist and omits native file counts.
  */
 final class ReadCardHandler extends AbstractHandler {
 	/** MCP tool name this handler serves. */

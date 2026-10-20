@@ -97,7 +97,7 @@ final class DeckStructureToolsTest extends TestCase {
 	public function testTheFourToolsFollowTheExistingOnes(): void {
 		$names = array_column($this->moduleWith($this->createMock(DeckGatewayInterface::class))->definitions(), 'name');
 
-		self::assertSame(['deck_create_board', 'deck_create_stack', 'deck_delete_stack', 'deck_delete_board'], array_slice($names, 9));
+		self::assertSame(['deck_create_board', 'deck_create_stack', 'deck_delete_stack', 'deck_delete_board'], array_slice($names, -4));
 	}
 
 	/** @return array<string, array{string, string, list<string>}> */

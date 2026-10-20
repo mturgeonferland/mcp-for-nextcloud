@@ -9,9 +9,10 @@ declare(strict_types=1);
  * Test doubles for the `OCA\Deck\Db` classes.
  *
  * `nextcloud/ocp` only ships `OCP\*`, and the Deck app is never installed in this test environment,
- * so the entities and mappers the module type-hints are declared here. Every signature mirrors Deck
+ * so the entities and mappers the module type-hints are declared here. Base signatures mirror Deck
  * `v1.17.5`, the tag whose `appinfo/info.xml` declares `nextcloud min-version="33" max-version="33"`.
  *
+ * The conditional dependentCards field mirrors Deck v1.18+; real NC32/33 absence is tested in containers.
  * The entities take an array of fields instead of the Deck constructor, which only makes the doubles
  * easier to build in a test; the getters return what a hydrated Deck entity would return.
  */
@@ -86,6 +87,7 @@ class Board {
 
 /** Stack entity double. */
 class Stack {
+	public function setCards(array $cards): void { $this->fields['cards'] = $cards; }
 	/**
 	 * @param array{id?: int, boardId?: int, title?: string, order?: int, cards?: Card[]} $fields Values the getters report.
 	 */
@@ -118,6 +120,9 @@ class Stack {
 
 /** Card entity double. */
 class Card {
+	protected ?array $dependentCards = null;
+	public function getDependentCards(): ?array { return $this->fields['dependentCards'] ?? null; }
+	public function setDependentCards(array $ids): void { $this->fields['dependentCards'] = $ids; }
 	/**
 	 * @param array{id?: int, stackId?: int, title?: string, description?: string, type?: string, owner?: string, order?: int, archived?: bool, deletedAt?: int, duedate?: \DateTime|null, done?: \DateTime|null, lastModified?: int, createdAt?: int, attachmentCount?: int|null, relatedBoard?: Board|null, assignedUsers?: Assignment[]|null} $fields Values the getters report.
 	 */
@@ -361,5 +366,19 @@ class AssignmentMapper {
 	 */
 	public function findIn(array $cardIds): array {
 		return [];
+	}
+}
+
+/** Label APIs verified against Deck v1.16.8–v1.19.0. */
+class Label {
+	public function __construct(private array $fields = []) {}
+	public function getId(): int { return $this->fields['id'] ?? 0; }
+	public function getBoardId(): int { return $this->fields['boardId'] ?? 0; }
+	public function getTitle(): string { return $this->fields['title'] ?? ''; }
+	public function getColor(): string { return $this->fields['color'] ?? ''; }
+}
+class LabelMapper {
+	public function findAll(int $boardId, ?int $limit = null, int $offset = 0): array {
+		throw new \LogicException('Stub: expected a PHPUnit mock.');
 	}
 }

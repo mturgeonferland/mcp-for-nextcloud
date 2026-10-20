@@ -17,6 +17,7 @@ use OCP\IUserManager;
 /**
  * Converts Deck entities into the plain arrays returned by the Deck tools.
  *
+ * Native attachmentCount is omitted: it includes files outside the caller's Files scope/tags.
  * Only fields the contract lists are exposed; Deck internals such as `shareToken`, ACL rows or
  * physical storage paths are never copied into the response. The card carries what a follow-up
  * needs to be actionable: who is responsible, whether it is late, and the absolute link to the
@@ -78,7 +79,7 @@ final class CardFormatter {
 	/**
 	 * @param Card $card Card as returned by the Deck services.
 	 * @param int|null $boardId Board the card belongs to, resolved once by the gateway for listings.
-	 * @return array{id: int, stackId: int, boardId: int|null, title: string, description: string, type: string, owner: string, order: int, archived: bool, done: int|null, duedate: string|null, lastModified: int, attachmentCount: int|null, assignedUsers: list<array{uid: string, displayName: string}>, overdue: bool, url: string|null}
+	 * @return array{id: int, stackId: int, boardId: int|null, title: string, description: string, type: string, owner: string, order: int, archived: bool, done: int|null, duedate: string|null, lastModified: int, assignedUsers: list<array{uid: string, displayName: string}>, overdue: bool, url: string|null}
 	 */
 	public function card(Card $card, ?int $boardId = null): array {
 		$boardId ??= $card->getRelatedBoard()?->getId();
@@ -104,7 +105,6 @@ final class CardFormatter {
 			'done' => $this->dateToTimestamp($card->getDone()),
 			'duedate' => CardCriteria::dueDay($card, $this->zone),
 			'lastModified' => $card->getLastModified(),
-			'attachmentCount' => $card->getAttachmentCount(),
 			'assignedUsers' => $assignedUsers,
 			'overdue' => CardCriteria::isOverdue($card, $this->time->getTime(), $this->zone),
 			'url' => $boardId === null

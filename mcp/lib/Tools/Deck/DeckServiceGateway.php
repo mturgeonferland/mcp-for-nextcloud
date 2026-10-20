@@ -98,6 +98,76 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		return array_values($this->service(LabelMapper::class)->findAll($boardId, $limit, $offset));
 	}
 
+
+	/** {@inheritDoc} */
+	public function cardLabelState(string $userId, int $cardId, array $requested): array {
+		$boards = $this->bindUser($userId);
+		$mapper = $this->service(CardMapper::class);
+		$permissions = $this->service(PermissionService::class);
+		$permissions->checkPermission($mapper, $cardId, Acl::PERMISSION_READ);
+		$permissions->checkPermission($mapper, $cardId, Acl::PERMISSION_EDIT);
+		$card = $mapper->find($cardId);
+		$boardId = (int)$mapper->findBoardId($cardId);
+		$board = null;
+		foreach ($boards->findAll(self::FRESH_BOARD_SINCE, false, true) as $candidate) {
+			if ((int)$candidate->getId() === $boardId && (int)$candidate->getDeletedAt() === 0) {
+				$board = $candidate;
+				break;
+			}
+		}
+		if ($board === null || (int)$card->getDeletedAt() !== 0 || $card->getArchived() || $board->getArchived()) {
+			throw new DeckRefusalException(DeckMessages::errorLabelsUnavailable());
+		}
+		$stackIds = array_map(static fn (Stack $s): int => (int)$s->getId(),
+			$this->service(StackMapper::class)->findAll($boardId));
+		if (!in_array((int)$card->getStackId(), $stackIds, true)) {
+			throw new DeckRefusalException(DeckMessages::errorLabelsUnavailable());
+		}
+		$catalog = [];
+		foreach ($this->service(LabelMapper::class)->findAll($boardId) as $label) {
+			if ((int)$label->getBoardId() === $boardId) {
+				$catalog[(int)$label->getId()] = ['id' => (int)$label->getId(), 'boardId' => $boardId,
+					'title' => (string)$label->getTitle(), 'color' => (string)$label->getColor()];
+			}
+		}
+		$assigned = array_map(static fn ($label): int => (int)$label->getId(), $card->getLabels() ?? []);
+		sort($assigned);
+		// A native cross-board move may leave old links. Preserve them without exposing their IDs or metadata.
+		// Only explicitly requested labels must belong to this board; foreign links remain HMAC-only state.
+		foreach ($requested as $id) {
+			if (!isset($catalog[$id])) {
+				throw new DeckRefusalException(DeckMessages::errorLabelsUnavailable());
+			}
+		}
+		$select = static function (array $ids) use ($catalog): array {
+			$ids = array_values(array_unique($ids));
+			sort($ids);
+			return array_map(static fn (int $id): array => $catalog[$id], $ids);
+		};
+		$owner = (string)$board->getOwner();
+		return ['card' => $this->filterCardReferences($userId, $card), 'boardId' => $boardId,
+			'board' => ['owner' => $owner, 'ownerDisplayName' => $this->displayName($owner), 'name' => (string)$board->getTitle()],
+			'labels' => $select(array_values(array_intersect($assigned, array_keys($catalog)))),
+			'foreignAssigned' => array_values(array_diff($assigned, array_keys($catalog))),
+			'requested' => $select($requested)];
+	}
+
+	/** {@inheritDoc} */
+	public function changeCardLabel(string $userId, int $cardId, int $labelId, bool $assign,
+		array $requested, array $expected): void {
+		$state = $this->cardLabelState($userId, $cardId, $requested);
+		if (!in_array($labelId, $requested, true) || CardLabelChanges::snapshot($state) !== $expected) {
+			throw new DeckConflictException(DeckMessages::labelPlanChanged());
+		}
+		$cards = $this->service(CardService::class);
+		// Deck v1.16.8–v1.19.0: each call changes one link; removeLabel itself lacks the foreign-board guard above.
+		if ($assign) {
+			$cards->assignLabel($cardId, $labelId);
+		} else {
+			$cards->removeLabel($cardId, $labelId);
+		}
+	}
+
 	/**
 	 * {@inheritDoc}
 	 */

@@ -120,6 +120,7 @@ class Stack {
 
 /** Card entity double. */
 class Card {
+	public function getLabels(): array { return $this->fields['labels'] ?? []; }
 	protected ?array $dependentCards = null;
 	public function getDependentCards(): ?array { return $this->fields['dependentCards'] ?? null; }
 	public function setDependentCards(array $ids): void { $this->fields['dependentCards'] = $ids; }

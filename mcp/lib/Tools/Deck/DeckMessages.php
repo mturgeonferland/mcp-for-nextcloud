@@ -48,6 +48,10 @@ final class DeckMessages {
 	public const TOOL_DELETE_BOARD_DESCRIPTION
 		= 'Deletes a Deck board you own, only if none of its lists holds a card, active or archived. Its empty lists go with it. Deck moves the board to its trash, where it can be recovered. A card created by someone else right after the second count the tool takes before finishing may go to the trash with the board; it is recoverable there.';
 
+	public const TOOL_EDIT_LABELS_DESCRIPTION = 'Adds or removes only the requested label IDs on a Deck card; preserves all other labels. Use deck_list_labels for that board. Preview first and repeat plan_state with confirm: true. At most 100 IDs per list; duplicates and already satisfied requests are unchanged; an ID cannot occur in both lists. A foreign-board label is refused. Read partial results before any further action.';
+	public const PARAM_LABEL_ADD = 'Label IDs to assign incrementally, from the card board (maximum 100).';
+	public const PARAM_LABEL_REMOVE = 'Label IDs to unassign incrementally, from the card board (maximum 100).';
+
 	/* Parameter descriptions. */
 	public const PARAM_BOARD_ID = 'Id of the Deck board.';
 	public const PARAM_STACK_ID = 'Id of the Deck list (stack).';
@@ -81,6 +85,51 @@ final class DeckMessages {
 		= ' If the resource belongs to somebody else, the agent MUST ask the user before sending confirm_shared: true.';
 
 	private function __construct() {
+	}
+
+	/** @return string Localized validation rule for label ID lists. */
+	public static function errorLabelIds(): string {
+		return Translator::t('use a list of positive integer label IDs, at most 100');
+	}
+
+	/** @return string Localized refusal of conflicting add/remove requests. */
+	public static function errorLabelOverlap(): string {
+		return Translator::t('a label cannot be added and removed in the same call');
+	}
+
+	/** @return string Localized requirement for a nonempty requested delta. */
+	public static function errorLabelEmpty(): string {
+		return Translator::t('request at least one label to add or remove');
+	}
+
+	/** @return string Localized refusal without disclosing an inaccessible label or card. */
+	public static function errorLabelsUnavailable(): string {
+		return Translator::t('The card or requested labels are unavailable for editing. Use an active card and labels from its own board.');
+	}
+
+	/** @return string Localized promise that unrelated label associations remain unchanged. */
+	public static function planLabels(): string {
+		return Translator::t('Only the requested label associations will change. All other labels will be preserved.');
+	}
+
+	/** @return string Localized request to approve the refreshed plan. */
+	public static function labelPlanChanged(): string {
+		return Translator::t('The card, board or labels changed. Review and approve the new plan before changing labels.');
+	}
+
+	/** @return string Localized guidance when current labels cannot be read safely. */
+	public static function labelsUnconfirmed(): string {
+		return Translator::t('The label result could not be verified. Check the card in Deck before taking any further action; do not repeat this write.');
+	}
+
+	/** @return string Localized guidance after an incomplete sequence. */
+	public static function labelsPartial(): string {
+		return Translator::t('Label changes stopped before all requested associations were confirmed. Review the current card in Deck and request a fresh plan before any further changes.');
+	}
+
+	/** @return string Localized observation without attributing another actor’s change to this call. */
+	public static function labelStateObserved(): string {
+		return Translator::t('The requested label state was observed after an error. This call may not have made that change; check the current labels before taking any further action.');
 	}
 
 	/**

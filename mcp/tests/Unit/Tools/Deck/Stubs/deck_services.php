@@ -190,6 +190,9 @@ namespace OCA\Deck\Service {
 
 	/** Card service double; signatures mirror Deck `v1.17.5` `lib/Service/CardService.php`. */
 	class CardService {
+		public function assignLabel(int $cardId, int $labelId): Card { throw new \LogicException('Stub'); }
+		public function removeLabel(int $cardId, int $labelId): Card { throw new \LogicException('Stub'); }
+
 		/**
 		 * @param int $cardId Card to read.
 		 * @return Card Enriched card.

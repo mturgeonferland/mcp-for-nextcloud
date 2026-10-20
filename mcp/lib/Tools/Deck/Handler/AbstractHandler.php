@@ -19,6 +19,7 @@ use OCA\Mcp\Tools\Deck\DeckRefusalException;
 use OCA\Mcp\Tools\Deck\DeckResult;
 use OCA\Mcp\Tools\Deck\DeckSessionException;
 use OCA\Mcp\Tools\Deck\DeckUnconfirmedException;
+use OCA\Mcp\Tools\PlanChanged;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -81,6 +82,8 @@ abstract class AbstractHandler {
 	protected function run(callable $operation): array {
 		try {
 			return DeckResult::ok($operation());
+		} catch (PlanChanged $e) {
+			throw $e;
 		} catch (InvalidArgumentException $e) {
 			throw $e;
 		} catch (DeckUnconfirmedException $e) {

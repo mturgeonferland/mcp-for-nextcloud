@@ -1331,6 +1331,17 @@ OC.L10N.register(
     "Groups {first}–{last} of {total}" : "Grupos {first}–{last} de {total}",
     "_%n module_::_%n modules_" : ["%n módulo", "%n módulos", "%n módulos"],
     "Blocked groups" : "Bloqueados",
-    "Blocked groups ({count})" : "Bloqueados ({count})"
+    "Blocked groups ({count})" : "Bloqueados ({count})",
+    "use a list of positive integer label IDs, at most 100" : "use uma lista de IDs inteiros positivos de etiquetas, no máximo 100",
+    "a label cannot be added and removed in the same call" : "uma etiqueta não pode ser adicionada e removida na mesma chamada",
+    "request at least one label to add or remove" : "solicite pelo menos uma etiqueta para adicionar ou remover",
+    "The card or requested labels are unavailable for editing. Use an active card and labels from its own board." : "O cartão ou as etiquetas solicitadas não estão disponíveis para edição. Use um cartão ativo e etiquetas do próprio quadro.",
+    "Only the requested label associations will change. All other labels will be preserved." : "Somente as associações de etiquetas solicitadas serão alteradas. Todas as outras etiquetas serão preservadas.",
+    "The card, board or labels changed. Review and approve the new plan before changing labels." : "O cartão, o quadro ou as etiquetas mudaram. Revise e aprove o novo plano antes de alterar etiquetas.",
+    "The label result could not be verified. Check the card in Deck before taking any further action; do not repeat this write." : "Não foi possível verificar o resultado das etiquetas. Confira o cartão no Deck antes de qualquer outra ação; não repita esta gravação.",
+    "Label changes stopped before all requested associations were confirmed. Review the current card in Deck and request a fresh plan before any further changes." : "As alterações de etiquetas pararam antes de confirmar todas as associações solicitadas. Revise o cartão atual no Deck e solicite um novo plano antes de outras alterações.",
+    "Change Deck card labels" : "Alterar etiquetas do cartão do Deck",
+    "Change labels on %s in %s." : "Alterar etiquetas de %s em %s.",
+    "The requested label state was observed after an error. This call may not have made that change; check the current labels before taking any further action." : "O estado solicitado das etiquetas foi observado após um erro. Esta chamada pode não ter feito essa alteração; confira as etiquetas atuais antes de qualquer outra ação."
 },
 "nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;");

@@ -29,6 +29,31 @@ interface DeckGatewayInterface {
 	public function listBoards(string $userId): array;
 
 	/**
+	 * Fresh editable card, active parents and board-local labels. Inherited foreign links remain internal.
+	 * @param string $userId Authenticated caller.
+	 * @param int $cardId Card to read after READ+EDIT checks.
+	 * @param list<int> $requested Label IDs, including removals currently absent from the card.
+	 * @return array{card: Card, boardId: int, board: array, labels: list<array>, requested: list<array>, foreignAssigned: list<int>}
+	 * @throws \Throwable When the caller, card, parents or requested labels are unavailable.
+	 */
+	public function cardLabelState(string $userId, int $cardId, array $requested): array;
+
+	/**
+	 * Rechecks the snapshot and ACL before one native incremental association write.
+	 * @param string $userId Authenticated caller.
+	 * @param int $cardId Card to edit.
+	 * @param int $labelId One requested board-local label.
+	 * @param bool $assign True to assign; false to remove only this link.
+	 * @param list<int> $requested All requested IDs to revalidate.
+	 * @param array<string, mixed> $expected Last observed canonical snapshot.
+	 * @return void
+	 * @throws DeckConflictException Before any native write when the snapshot differs.
+	 * @throws \Throwable When validation or the native operation fails; the handler reads state again.
+	 */
+	public function changeCardLabel(string $userId, int $cardId, int $labelId, bool $assign,
+		array $requested, array $expected): void;
+
+	/**
 	 * Labels of a readable board, with pagination applied after the READ check.
 	 * @return list<\OCA\Deck\Db\Label> Labels in the native mapper order.
 	 */

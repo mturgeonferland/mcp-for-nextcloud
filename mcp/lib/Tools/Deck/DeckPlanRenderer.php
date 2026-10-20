@@ -28,6 +28,7 @@ final class DeckPlanRenderer {
 		try {
 			$zone = $this->resolveZone($plan);
 			return match ($tool) {
+				'deck_edit_card_labels' => $this->renderLabels($plan),
 				'deck_create_card' => $this->renderCreate($plan, $zone),
 				'deck_edit_card' => $this->renderEdit($plan, $zone),
 				'deck_move_card' => $this->renderMove($plan),
@@ -44,9 +45,25 @@ final class DeckPlanRenderer {
 	}
 
 	/**
-	 * Resolves the timezone from the plan if present, falling back to constructor or system default.
+	 * Renders the card/board identity and visible before/after labels.
+	 * @return string Escaped confirmation body.
 	 *
 	 * @param array<string, mixed> $plan
+	 */
+	private function renderLabels(array $plan): string {
+		$labels = static fn (array $items): string => $items === [] ? '—' : implode(', ', array_map(
+			static fn (array $label): string => PlanText::inline($label['title']) . ' (' . (int)$label['id'] . ')', $items));
+		return Translator::t('Change labels on %s in %s.', [PlanText::em($plan['card']['title']), PlanText::em($plan['board']['name'])])
+			. "\n\n" . Translator::t('Before: %s', [$labels($plan['before'])])
+			. "\n\n" . Translator::t('After: %s', [$labels($plan['after'])])
+			. "\n\n" . DeckMessages::planLabels()
+			. ($this->sharedLine($plan['board']) === [] ? '' : "\n\n" . implode("\n", $this->sharedLine($plan['board'])));
+	}
+
+	/**
+	 * Resolves the timezone from the plan, constructor or system default.
+	 * @param array<string, mixed> $plan Confirmation plan.
+	 * @return \DateTimeZone Timezone used for display.
 	 */
 	private function resolveZone(array $plan): \DateTimeZone {
 		if (isset($plan['timezone']) && is_string($plan['timezone']) && $plan['timezone'] !== '') {

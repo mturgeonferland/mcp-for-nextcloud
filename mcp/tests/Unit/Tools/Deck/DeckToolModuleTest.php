@@ -124,10 +124,11 @@ final class DeckToolModuleTest extends TestCase {
 		self::assertInstanceOf(ToolModule::class, $this->module);
 	}
 
-	public function testDeclaresTheFourteenToolsInTheDeclaredOrder(): void {
+	public function testDeclaresTheFifteenToolsInTheDeclaredOrder(): void {
 		self::assertSame([
 			'deck_list_boards',
 			'deck_list_labels',
+			'deck_edit_card_labels',
 			'deck_list_stacks',
 			'deck_list_cards',
 			'deck_read_card',
@@ -158,6 +159,7 @@ final class DeckToolModuleTest extends TestCase {
 		return [
 			'list boards' => [ListBoardsHandler::TOOL, 'read'],
 			'list labels' => ['deck_list_labels', 'read'],
+			'edit labels' => ['deck_edit_card_labels', 'edit'],
 			'list stacks' => [ListStacksHandler::TOOL, 'read'],
 			'list cards' => [ListCardsHandler::TOOL, 'read'],
 			'read card' => [ReadCardHandler::TOOL, 'read'],

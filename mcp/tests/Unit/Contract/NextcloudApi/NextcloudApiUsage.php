@@ -87,6 +87,8 @@ final class NextcloudApiUsage {
         'OCA\\Deck\\Service\\CardService::create' => ['title', 'stackId', 'type', 'order', 'owner', 'description', 'duedate'],
         'OCA\\Deck\\Service\\CardService::delete' => ['id'],
         'OCA\\Deck\\Service\\CardService::find' => ['cardId'],
+        'OCA\\Deck\\Service\\CardService::assignLabel' => ['cardId', 'labelId'],
+        'OCA\\Deck\\Service\\CardService::removeLabel' => ['cardId', 'labelId'],
         'OCA\\Deck\\Service\\CardService::reorder' => ['id', 'stackId', 'order'],
         'OCA\\Deck\\Service\\CardService::update' => ['id', 'title', 'stackId', 'type', 'owner', 'description', 'order', 'duedate', 'deletedAt', 'archived', 'done'],
         'OCA\\Deck\\Service\\PermissionService::checkPermission' => ['mapper', 'id', 'permission', 'userId', 'allowDeletedCard'],

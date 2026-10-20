@@ -209,6 +209,49 @@ switch ($action) {
             'references' => count($card->getDependentCards() ?? []),
             'statements' => $log === null ? null : count($log->statementsBetween($pid, $begin, $end))];
         break;
+    case 'mcp-labels':
+        $module = new OCA\Mcp\Tools\Deck\DeckToolModule(OC::$server, $apps, Server::get(Psr\Log\LoggerInterface::class),
+            Server::get(OCP\IURLGenerator::class), Server::get(OCP\AppFramework\Utility\ITimeFactory::class),
+            Server::get(OCP\IUserManager::class), Server::get(OCP\IConfig::class), Server::get(OCP\ISession::class));
+        try {
+            if (OCA\Mcp\Tools\WriteGate::confirmed($in['arguments'])) {
+                $result = $module->call('deck_edit_card_labels', $in['arguments'], $uid);
+            } else {
+                $plan = $module->preview('deck_edit_card_labels', $in['arguments'], $uid);
+                $result = OCA\Mcp\Tools\Deck\DeckResult::ok(OCA\Mcp\Tools\WriteGate::envelope(
+                    ['name' => 'deck_edit_card_labels'], $plan));
+            }
+            $out = ['result'=>$result];
+        } catch (OCA\Mcp\Tools\PlanChanged $e) { $out = ['changedPlan'=>$e->plan]; }
+        catch (OCA\Mcp\Tools\ToolFailure $e) { $out = ['result'=>OCA\Mcp\Tools\Deck\DeckResult::error($e->getMessage())]; }
+        // Read through the same service that populates the native Deck UI, in this fresh actor request.
+        try { $out['nativeLabels'] = labelIds($cards->find($in['arguments']['cardId'])); }
+        catch (OCA\Deck\NoPermissionException) { $out['nativeLabels'] = null; }
+        break;
+    case 'label-third':
+        $out['third'] = $labels->create('Preserve third', '111111', $in['board'])->getId();
+        $cards->assignLabel($in['a'], $out['third']);
+        break;
+    case 'label-concurrent':
+        $cards->assignLabel($in['a'], $in['keep']); $out=['changed'=>true]; break;
+    case 'label-archive':
+        if (($in['target'] ?? 'card') === 'card') { $cards->archive($in['a']); }
+        else { $board=$boards->find($in['board']); $boards->update($in['board'],$board->getTitle(),$board->getColor(),true); }
+        $out=['archived'=>true]; break;
+    case 'label-revoke':
+        foreach ($boards->find($in['board'])->getAcl() as $acl) {
+            if ($acl->getParticipant() === F::EDITOR) { $boards->deleteAcl($acl->getId()); }
+        }
+        $out=['revoked'=>true]; break;
+    case 'label-move-probe':
+        $cards->assignLabel($in['a'], $in['keep']);
+        $private = $cards->find($in['privateCard']);
+        $cards->reorder($in['a'], $private->getStackId(), 1);
+        $out = ['labelsAfterMove' => labelIds($cards->find($in['a']))];
+        break;
+    case 'label-move':
+        $private = $cards->find($in['privateCard']);
+        $cards->reorder($in['a'], $private->getStackId(), 1);$out=['moved'=>true]; break;
     case 'labels':
         $out['available'] = array_map(fn ($l) => (int)$l->getId(), $boards->find($in['board'])->getLabels());
         $cards->assignLabel($in['a'], $in['keep']); $cards->assignLabel($in['a'], $in['toggle']);

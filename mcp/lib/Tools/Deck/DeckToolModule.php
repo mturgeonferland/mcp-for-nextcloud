@@ -9,6 +9,7 @@ namespace OCA\Mcp\Tools\Deck;
 
 use InvalidArgumentException;
 use OCA\Mcp\Service\Compat\AppEnablement;
+use OCA\Mcp\Service\UserTimezone;
 use OCA\Mcp\Tools\Deck\Handler\AbstractHandler;
 use OCA\Mcp\Tools\Deck\Handler\CreateBoardHandler;
 use OCA\Mcp\Tools\Deck\Handler\CreateCardHandler;
@@ -17,6 +18,7 @@ use OCA\Mcp\Tools\Deck\Handler\DeleteBoardHandler;
 use OCA\Mcp\Tools\Deck\Handler\DeleteCardHandler;
 use OCA\Mcp\Tools\Deck\Handler\DeleteStackHandler;
 use OCA\Mcp\Tools\Deck\Handler\EditCardHandler;
+use OCA\Mcp\Tools\Deck\Handler\EditCardLabelsHandler;
 use OCA\Mcp\Tools\Deck\Handler\FollowupCardsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListBoardsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListCardsHandler;
@@ -24,14 +26,14 @@ use OCA\Mcp\Tools\Deck\Handler\ListLabelsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListStacksHandler;
 use OCA\Mcp\Tools\Deck\Handler\MoveCardHandler;
 use OCA\Mcp\Tools\Deck\Handler\ReadCardHandler;
-use OCA\Mcp\Service\UserTimezone;
+use OCA\Mcp\Tools\PlanState;
 use OCA\Mcp\Tools\PreviewsWrites;
 use OCA\Mcp\Tools\RendersPlans;
 use OCA\Mcp\Tools\ToolFailure;
 use OCA\Mcp\Tools\ToolGuideNotes;
 use OCA\Mcp\Tools\ToolModule;
-use OCP\App\IAppManager;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\App\IAppManager;
 use OCP\IConfig;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
@@ -40,7 +42,7 @@ use Psr\Log\LoggerInterface;
 use stdClass;
 
 /**
- * The Deck tool module: fourteen tools that read, follow up, create, edit, move and delete Deck cards, and
+ * The Deck tool module: fifteen tools that read, follow up, create, edit, move and delete Deck cards, and
  * build or empty the structure around them (boards and lists).
  *
  * This class only declares the tools and routes a call to a handler. It holds no Deck logic and
@@ -96,6 +98,8 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 */
 	public function guideNotes(): array {
 		return [
+			'deck_edit_card_labels changes only add/remove label IDs on a card, preserving all other labels. '
+				. 'Use deck_list_labels on its board first. Preview before confirm and repeat plan_state; a changed state needs a new approval.',
 			'A card is addressed by three ids: deck_list_boards gives the board, deck_list_stacks the lists of a '
 				. 'board, and deck_list_cards the cards of a list. Read them in that order before writing anything.',
 			'deck_read_card returns the card with its comments; deck_followup_cards lists the cards that are due or '
@@ -149,6 +153,20 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				'module' => self::MODULE,
 				'operation' => 'read',
 				'app' => self::DECK_APP,
+			],
+			[
+				'name' => EditCardLabelsHandler::TOOL,
+				'description' => DeckMessages::TOOL_EDIT_LABELS_DESCRIPTION . DeckMessages::CONFIRM_SHARED_DESCRIPTION,
+				'inputSchema' => $this->schema([
+					'cardId' => $this->integer(DeckMessages::PARAM_CARD_ID),
+					'add' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1],
+						'maxItems' => CardLabelChanges::MAX_LABELS, 'description' => DeckMessages::PARAM_LABEL_ADD],
+					'remove' => ['type' => 'array', 'items' => ['type' => 'integer', 'minimum' => 1],
+						'maxItems' => CardLabelChanges::MAX_LABELS, 'description' => DeckMessages::PARAM_LABEL_REMOVE],
+					'confirm_shared' => $this->confirmShared(),
+					PlanState::ARGUMENT => PlanState::property(),
+				], ['cardId']),
+				'module' => self::MODULE, 'operation' => 'edit', 'app' => self::DECK_APP,
 			],
 			[
 				'name' => ListStacksHandler::TOOL,
@@ -415,6 +433,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	public function preview(string $name, array $arguments, string $userId): array {
 		try {
 			$plan = match ($name) {
+				EditCardLabelsHandler::TOOL => $this->labelHandler($userId)->preview($arguments, $userId),
 				CreateCardHandler::TOOL => $this->planCreate($arguments, $userId),
 				EditCardHandler::TOOL => $this->planEdit($arguments, $userId),
 				MoveCardHandler::TOOL => $this->planMove($arguments, $userId),
@@ -824,6 +843,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		$formatter = $this->formatter($userId);
 
 		return match ($name) {
+			EditCardLabelsHandler::TOOL => $this->labelHandler($userId),
 			ListLabelsHandler::TOOL => new ListLabelsHandler($this->gateway(), $this->logger),
 			ListBoardsHandler::TOOL => new ListBoardsHandler($this->gateway(), $this->logger, $formatter),
 			ListStacksHandler::TOOL => new ListStacksHandler($this->gateway(), $this->logger, $formatter),
@@ -844,7 +864,16 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 
 	/**
 	 * @param string $userId UID of the authenticated caller, whose timezone the payload speaks.
-	 * @return CardFormatter Formatter bound to this module's dependencies.
+	 * @return EditCardLabelsHandler Handler with a lazy fingerprint service.
+	 */
+	private function labelHandler(string $userId): EditCardLabelsHandler {
+		return new EditCardLabelsHandler($this->gateway(), $this->logger, $this->formatter($userId),
+			fn (): PlanState => new PlanState($this->config ?? $this->container->get(IConfig::class)));
+	}
+
+	/**
+	 * @param string $userId Authenticated caller whose timezone the payload uses.
+	 * @return CardFormatter Formatter bound to the module dependencies.
 	 */
 	private function formatter(string $userId): CardFormatter {
 		return new CardFormatter($this->urlGenerator, $this->timeFactory, $this->userManager, $this->zones()?->forUser($userId));

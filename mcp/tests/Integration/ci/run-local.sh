@@ -174,8 +174,24 @@ cleanup() {
     [ -n "$SAMPLER_PID" ] && kill "$SAMPLER_PID" 2>/dev/null
     if docker info >/dev/null 2>&1; then
         log "removing the test containers, network and volumes"
+        # Inspect only this run's anonymous volumes, before rm -v loses their names.
+        volumes=$(docker inspect --format '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\n"}}{{end}}{{end}}' \
+            "$NC_NAME" "$DB_NAME" 2>/dev/null || true)
         docker rm -f -v "$NC_NAME" "$DB_NAME" >/dev/null 2>&1
         docker network rm "$NET_NAME" >/dev/null 2>&1
+        # Prove removal while the daemon is still up; a stopped daemon cannot prove an empty inventory.
+        remaining=$(docker ps -aq --filter "name=$NC_NAME" --filter "name=$DB_NAME") || remaining=unavailable
+        networks=$(docker network ls --filter "name=^$NET_NAME$" --format '{{.Name}}') || networks=unavailable
+        leftover_volumes=""
+        for volume in $volumes; do
+            if docker volume inspect "$volume" >/dev/null 2>&1; then leftover_volumes="$leftover_volumes $volume"; fi
+        done
+        printf 'containers=%s\nnetwork=%s\nvolumes=%s\n' "${remaining:-none}" "${networks:-none}" "${leftover_volumes:-none}" \
+            > "$LOCAL_DIR/cleanup.txt"
+        if [ -n "$remaining$networks$leftover_volumes" ]; then
+            log "cleanup left resources or could not verify removal (see cleanup.txt)"
+            status=1
+        fi
         if [ "$PRUNE_IMAGES" = 1 ]; then
             for image in "$NC_IMAGE" "$DB_IMAGE"; do
                 [ -n "$image" ] && docker rmi "$image" >/dev/null 2>&1

@@ -232,7 +232,11 @@ cmd_fixtures() {
         *"- password_policy:"*) occ app:disable password_policy ;;
     esac
     password=$(openssl rand -hex 24)
-    for uid in mcp-it-alice mcp-it-bob mcp-it-legacy; do
+    set -- mcp-it-alice mcp-it-bob mcp-it-legacy
+    if [ "${MCP_IT_WITH_DECK:-1}" = 1 ]; then
+        set -- "$@" mcp-it-deck-owner mcp-it-deck-reader mcp-it-deck-editor mcp-it-deck-outsider
+    fi
+    for uid in "$@"; do
         docker exec -u www-data -e OC_PASS="$password" "$NC" php /var/www/html/occ user:add --password-from-env "$uid"
     done
     if [ "$MCP_IT_MODE" = upgrade ]; then
@@ -244,6 +248,11 @@ cmd_fixtures() {
     occ group:add mcp-it-staff
     occ group:add mcp-it-empty
     occ group:adduser mcp-it-staff mcp-it-alice
+    if [ "${MCP_IT_WITH_DECK:-1}" = 1 ]; then
+        occ group:add mcp-it-deck-members
+        occ group:adduser mcp-it-deck-members mcp-it-deck-reader
+        occ group:adduser mcp-it-deck-members mcp-it-deck-editor
+    fi
 }
 
 # Downloads a release archive from the project's release repository, checks it against the pinned checksum and
@@ -266,24 +275,28 @@ install_release_app() {
 pin_releases() {
     case "$MCP_IT_NC" in
         32)
+            DECK_TAG=v1.16.8; DECK_SHA=231142da72ed6a6f74d74330431f3f9370e72714e30c67b8ba5c76f3a5545279
             GF_TAG=v20.1.19; GF_SHA=e59e6a11a50f60bf3bd23c243b7ec4b01af371c89e4ad65d4ec7e788058f50ff
             TALK_TAG=v22.0.19; TALK_SHA=c053dbce9c2a4a76c42e937d4d095502ba48a38c2e6fa02d46c36762573d6bff
             NOTES_TAG=v5.0.2; NOTES_SHA=1bf9e97a92bae5901a17c93666c4ac0f36ddfe68c69caa5d2368b18be6af7fdc
             CAL_TAG=v6.6.2; CAL_SHA=7e83632d4436d3037a34d1c73cbc06d5ccb6e8fc10f096a86a43a0515588529c
             ;;
         33)
+            DECK_TAG=v1.17.7; DECK_SHA=889a9186ff74dc6d77b719ba81ba16f30a23e0cc1fd100954d7d7e153d2d495e
             GF_TAG=v21.0.15; GF_SHA=1ecdd644a2e913de8b333560717660f0ba75836309c4463af858e886cdc3a68c
             TALK_TAG=v23.0.12; TALK_SHA=a907070cb8c0eb69a0ef808f62ea6eea822365c97a1c0e6f4a86aa748eda6c79
             NOTES_TAG=v6.0.2; NOTES_SHA=da362fb5a574b45cc0e10f4ea7f81547cc3dd10bf916f9d9b590358c1ed8e101
             CAL_TAG=v6.6.2; CAL_SHA=7e83632d4436d3037a34d1c73cbc06d5ccb6e8fc10f096a86a43a0515588529c
             ;;
         34)
+            DECK_TAG=v1.18.5; DECK_SHA=dafec6635ff3af50fb6f73330064ef6153910be2fa434d2edbf8043263122253
             GF_TAG=v22.0.6; GF_SHA=bfff357b12bbd24257d8d127cf30e83a72256e7659f1cc3e32bd09fe647d2f9b
             TALK_TAG=v24.0.6; TALK_SHA=4a8d5cf52ed42223ea9937860f70c2e9dca1df8bfd5f75b871ae7569d2106110
             NOTES_TAG=v6.0.2; NOTES_SHA=da362fb5a574b45cc0e10f4ea7f81547cc3dd10bf916f9d9b590358c1ed8e101
             CAL_TAG=v6.6.2; CAL_SHA=7e83632d4436d3037a34d1c73cbc06d5ccb6e8fc10f096a86a43a0515588529c
             ;;
         35)
+            DECK_TAG=v1.19.0; DECK_SHA=4946ae3e0f7939d8cdd6c3a72f35ccc92703d2c5a694586d65ce02d724d3eaa8
             GF_TAG=v23.0.1; GF_SHA=3949e6a45947188090c170c6983aae11a1d66134ec317ffe7b7609062f3aecf3
             TALK_TAG=v25.0.6; TALK_SHA=2b3e3eae42d9bf8ba8da2ab244d16347a3cfacbb8bff346bd99cf32cd6f9c65e
             NOTES_TAG=v6.0.2; NOTES_SHA=da362fb5a574b45cc0e10f4ea7f81547cc3dd10bf916f9d9b590358c1ed8e101
@@ -326,10 +339,40 @@ provision_files_external() {
     occ files_external:list
 }
 
+# Deck is verified before enablement. Cache only archives, by checksum, never installation state or credentials.
+# A cold local run downloads once; subsequent disposable runs verify and reuse exactly those bytes.
+provision_deck() {
+    started=$(php -r 'echo (int)(microtime(true)*1000);')
+    cache="$WORK/deck-downloads"
+    [ "${MCP_IT_LOCAL:-0}" != 1 ] || cache="$REPO_ROOT/mcp/tests/Integration/.local-runs/deck-downloads"
+    mkdir -p "$cache"
+    archive="$cache/deck-$DECK_TAG-$DECK_SHA.tar.gz"
+    hit=warm
+    if [ ! -f "$archive" ]; then
+        hit=cold
+        curl -fsSL -o "$archive.part" "https://github.com/nextcloud-releases/deck/releases/download/$DECK_TAG/deck-$DECK_TAG.tar.gz"
+        echo "$DECK_SHA  $archive.part" | sha256_check
+        mv "$archive.part" "$archive"
+    fi
+    echo "$DECK_SHA  $archive" | sha256_check
+    cp "$archive" "$TOOLS_DIR/deck.tar.gz"
+    downloaded=$(php -r 'echo (int)(microtime(true)*1000);')
+    docker exec -u www-data "$NC" tar -xzf /mcp-it-tools/deck.tar.gz -C /var/www/html/custom_apps
+    docker exec -u www-data "$NC" php /mcp-it-src/mcp/tests/Integration/ci/check-deck-manifest.php \
+        /var/www/html/custom_apps/deck/appinfo/info.xml "$MCP_IT_NC" "${DECK_TAG#v}"
+    occ app:enable deck
+    actual=$(occ config:app:get deck installed_version)
+    [ "$actual" = "${DECK_TAG#v}" ] || { echo "Unexpected installed Deck $actual" >&2; return 1; }
+    finished=$(php -r 'echo (int)(microtime(true)*1000);')
+    printf 'cache\tdownload_verify_ms\textract_enable_ms\ttotal_ms\n%s\t%s\t%s\t%s\n' \
+        "$hit" "$((downloaded-started))" "$((finished-downloaded))" "$((finished-started))" > "$ARTIFACTS/deck-cost.tsv"
+}
+
 # Each part is attempted on its own and a failure is recorded, never fatal here: the suite then fails by name at
 # the scenario that needs the part (Exclusion/ProvisioningTest), with this log next to it in the uploaded artifact.
 cmd_provision() {
     pin_releases
+    case "${MCP_IT_WITH_DECK:-1}" in 0|1) ;; *) echo "MCP_IT_WITH_DECK must be 0 or 1" >&2; return 1 ;; esac
     # Core keeps the app config in the web server's local cache (APCu) for 3 seconds (AppConfig::LOCAL_CACHE_TTL, NC 32 to
     # 35) and invalidates it only for writes made through that same cache; the PHP CLI that writes the settings in this
     # suite has no such cache. Most scenarios change the exclusion list and read it back at once, so the cache is off
@@ -338,7 +381,9 @@ cmd_provision() {
     log="$ARTIFACTS/provision.log"
     : > "$log"
     : > "$WORK/provision-failures"
-    for part in groupfolders files_external talk notes calendar; do
+    parts="groupfolders files_external talk notes calendar"
+    [ "${MCP_IT_WITH_DECK:-1}" != 1 ] || parts="$parts deck"
+    for part in $parts; do
         echo "=== provisioning $part" | tee -a "$log"
         case "$part" in
             groupfolders) step=provision_groupfolders ;;
@@ -346,6 +391,7 @@ cmd_provision() {
             talk) step="install_release_app spreed spreed $TALK_TAG $TALK_SHA" ;;
             notes) step="install_release_app notes notes $NOTES_TAG $NOTES_SHA" ;;
             calendar) step="install_release_app calendar calendar $CAL_TAG $CAL_SHA" ;;
+            deck) step=provision_deck ;;
         esac
         # Not inside an if or ||: there errexit would be ignored in the subshell and a failing command would not
         # fail the part.
@@ -390,6 +436,11 @@ cmd_report() {
     status=$(occ status)
     installed=$(occ config:app:get mcp installed_version)
     expected=$(cat "$WORK/expected-version")
+    deck=disabled-for-comparison
+    if [ "${MCP_IT_WITH_DECK:-1}" = 1 ]; then
+        pin_releases
+        deck="$(occ config:app:get deck installed_version) (expected ${DECK_TAG#v}; archive sha256 $DECK_SHA)"
+    fi
     fence='```'
     report="$ARTIFACTS/runtime.md"
     cat > "$report" <<REPORT
@@ -401,6 +452,7 @@ Database: $database
 $php_version
 $status
 mcp installed_version: $installed (expected $expected)
+Deck: $deck
 $fence
 REPORT
     cat "$report"
@@ -410,12 +462,19 @@ REPORT
 }
 
 cmd_test() {
+    if [ "${MCP_IT_RUN_UNIT:-0}" = 1 ]; then
+        # Separate PHP process: the unit bootstrap must never share the real server's loaded classes.
+        docker exec -u www-data "$NC" php -d memory_limit=1G -d post_max_size=1G -d upload_max_filesize=1G \
+            /mcp-it-tools/phpunit.phar -c /mcp-it-src/mcp/phpunit.xml --do-not-cache-result \
+            --cache-directory /tmp/mcp-it-unit-cache --log-junit /tmp/mcp-it-unit.xml
+    fi
+    pin_releases
     expected=$(cat "$WORK/expected-version")
     set -- -e NEXTCLOUD_ROOT=/var/www/html -e MCP_IT_NC="$MCP_IT_NC" -e MCP_IT_DB="$MCP_IT_DB" \
         -e MCP_IT_MODE="$MCP_IT_MODE" -e MCP_IT_EXPECTED_VERSION="$expected" -e MCP_IT_LEGACY=/tmp/mcp-it-legacy.json \
         -e MCP_IT_SNAPSHOT=/tmp/mcp-it-snapshot.json -e MCP_IT_BASELINE_APP=/tmp/mcp-previous \
         -e MCP_IT_PROVISION_FAILURES="$(tr '\n' ' ' < "$WORK/provision-failures" 2>/dev/null || true)" \
-        -e MCP_IT_GF_NAME="$GF_NAME"
+        -e MCP_IT_GF_NAME="$GF_NAME" -e MCP_IT_DECK_VERSION="${DECK_TAG#v}"
     if [ "$MCP_IT_DB" = pgsql ]; then
         set -- "$@" -e MCP_IT_PG_LOG=/mcp-it-pglog/postgresql.log
     fi
@@ -430,6 +489,7 @@ cmd_collect() {
     docker logs "$NC" > "$ARTIFACTS/nextcloud-container.log" 2>&1 || true
     docker logs "$DB" > "$ARTIFACTS/database-container.log" 2>&1 || true
     docker cp "$NC:/var/www/html/data/nextcloud.log" "$ARTIFACTS/nextcloud.log" 2>/dev/null || true
+    docker cp "$NC:/tmp/mcp-it-unit.xml" "$ARTIFACTS/unit.xml" 2>/dev/null || true
     docker cp "$NC:/tmp/mcp-it-junit.xml" "$ARTIFACTS/junit.xml" 2>/dev/null || true
     docker cp "$NC:/tmp/mcp-it-observations.txt" "$ARTIFACTS/observations.txt" 2>/dev/null || true
     if [ -f "$PG_LOG_DIR/postgresql.log" ]; then

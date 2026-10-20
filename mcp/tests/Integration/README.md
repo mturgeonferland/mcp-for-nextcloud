@@ -357,3 +357,43 @@ controls; `Unit/Contract/EXCLUSION-MATRIX.md` holds the verdict and the limits.
   (including the ancestor walk in a fresh process, `Support/chain-probe.php`) and the answers of the tools for it. Behavior
   that is documented rather than asserted (the narrow mount of a subdirectory is a separate storage) is recorded there too.
 - Not covered by the Exclusion directory: V6 (federated), groupfolder ACL rules and S-scenarios of part B. V9 phase 2 is covered by Policy/ScopeRealProofTest (B8).
+
+## Native Deck fixtures (DK-6a)
+
+Normal provisioning also installs Deck, without bypassing any other optional app. `pin_releases` pins
+NC32/33/34/35 to Deck1.16.8/1.17.7/1.18.5/1.19.0 and the SHA-256 of each release archive. Before enabling it,
+`ci/check-deck-manifest.php` checks the app id, version and exact Nextcloud major bounds. `runtime.md` records
+the installed version, expected pin and checksum. A missing/failed app fails the `deck` group, never skips it.
+
+    MCP_IT_PHPUNIT_ARGS='--group deck' sh mcp/tests/Integration/ci/run-local.sh 35 mariadb fresh
+
+The `Deck/DeckFixture` actor helper starts a fresh PHP request for each UID/action, avoiding cached Deck services
+bound to a previous UID. Its four dedicated accounts (owner, reader, editor, outsider) have random throwaway
+passwords. Boards/cards in different ACL domains, files, a group and a native circle are disposable fixtures.
+`Deck/NativeDeckTest` asserts the native label delta, foreign-label rejection, native dependency availability and
+semantics, and file share/detach preservation. It deliberately records the native acceptance of cycles and self
+relations: the MCP refusal is a later ticket. On NC32/33 API absence is asserted while labels/files still run.
+These tests call native services; they do not implement or promise new MCP tools.
+
+Local runs cache only the Deck archive under `.local-runs/deck-downloads/`, keyed by tag and SHA, verifying its
+checksum even on a hit. Remove that directory for a cold download. `artifacts/deck-cost.tsv` separates download
+and checksum time from extraction/enablement, in milliseconds; `resources.log` samples the engine/containers.
+For comparable whole-cell timing, run the same existing tests with Deck enabled/disabled:
+
+    MCP_IT_WITH_DECK=1 MCP_IT_PHPUNIT_ARGS='--filter ProvisioningTest --exclude-group deck' sh mcp/tests/Integration/ci/run-local.sh 35 mariadb fresh
+    MCP_IT_WITH_DECK=0 MCP_IT_PHPUNIT_ARGS='--filter ProvisioningTest --exclude-group deck' sh mcp/tests/Integration/ci/run-local.sh 35 mariadb fresh
+
+`MCP_IT_WITH_DECK=0` exists for the explicit cost comparison, not as a passing Deck configuration: selecting the
+`deck` group with it fails, which also exercises log collection and cleanup after failure. Normal runs default to
+Deck enabled. Do not substitute the old interactive spike mode or fixed passwords.
+
+For the full PHP unit suite in a separate PHP process inside the same disposable container, install the locked
+development dependencies with `composer install --working-dir=mcp`, then set `MCP_IT_RUN_UNIT=1`. The unit
+bootstrap must not share the integration bootstrap's real Nextcloud classes; its JUnit report is `unit.xml`.
+The normal integration suite still runs afterwards (or the explicit `MCP_IT_PHPUNIT_ARGS` selection):
+
+    MCP_IT_RUN_UNIT=1 sh mcp/tests/Integration/ci/run-local.sh 35 mariadb fresh
+
+Frontend unit tests need no Nextcloud service: `node --test mcp/tests/Frontend/*.test.cjs`. Both suites keep their
+existing entry points. Fresh/upgrade and database selection are unchanged. Always finish with
+`ci/run-local.sh --shutdown` and check `colima status`; cached archives/images are files, not running services.

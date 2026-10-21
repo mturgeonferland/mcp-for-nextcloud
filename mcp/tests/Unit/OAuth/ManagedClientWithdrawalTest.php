@@ -22,7 +22,6 @@ use OCA\Mcp\OAuth\TokenOwnerGate;
 use OCA\Mcp\OAuth\TokenService;
 use OCA\Mcp\Service\GrantPolicy;
 use OCA\Mcp\Tests\Unit\InMemoryConfig;
-use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Config\IUserConfig;
@@ -221,8 +220,8 @@ final class ManagedClientWithdrawalTest extends TestCase {
     public function testAPendingConsentStillWorksWhileNothingWasWithdrawn(string $decision): void {
         $client = $this->addClient('QwenPaw', [self::URI_X]);
         $response = $this->controller->consent($this->openConsent($client['clientId'], self::URI_X), $decision);
-        $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringStartsWith(self::URI_X . '?', $response->getRedirectURL());
+        $this->assertInstanceOf(TemplateResponse::class, $response);
+        $this->assertStringStartsWith(self::URI_X . '?', $response->getParams()['target']);
         $this->assertCount($decision === 'allow' ? 1 : 0, $this->store->codes);
     }
 
@@ -274,7 +273,7 @@ final class ManagedClientWithdrawalTest extends TestCase {
         $pending = $this->openConsent($client['clientId'], self::URI_X);
         $this->table->db->dbal->update(\OCA\Mcp\Db\OAuthClientsMapper::TABLE, ['redirect_uris' => json_encode([self::URI_Y])],
             ['client_id' => $client['clientId']]);
-        $this->assertInstanceOf(TemplateResponse::class, $this->controller->consent($pending, $decision));
+        $this->assertSame('consent', $this->controller->consent($pending, $decision)->getTemplateName());
         $this->assertSame([], $this->store->codes);
     }
 
@@ -283,7 +282,8 @@ final class ManagedClientWithdrawalTest extends TestCase {
         $this->edit($client['id'], ['enabled' => false]);
         $this->edit($client['id'], ['enabled' => true]);
         $response = $this->controller->consent($this->openConsent($client['clientId'], self::URI_X), 'allow');
-        $this->assertInstanceOf(RedirectResponse::class, $response);
+        $this->assertInstanceOf(TemplateResponse::class, $response);
+        $this->assertSame('oauth-redirect', $response->getTemplateName());
         $this->assertCount(1, $this->store->codes);
     }
 
@@ -294,6 +294,7 @@ final class ManagedClientWithdrawalTest extends TestCase {
         $this->clients->update((string)$this->data->revision, null, false, null);
         $response = $this->controller->consent($pending, $decision);
         $this->assertInstanceOf(TemplateResponse::class, $response);
+        $this->assertArrayNotHasKey('target', $response->getParams());
         $this->assertSame([], $this->store->codes);
     }
 
@@ -422,12 +423,12 @@ final class ManagedClientWithdrawalTest extends TestCase {
         $pending = $this->openConsent(NativeClient::CLIENT_ID, 'http://localhost:53421/oauth/callback');
         $this->clients->update((string)$this->data->revision, null, false, null);
         $this->clients->update((string)$this->data->revision, null, true, null);
-        $this->assertInstanceOf(TemplateResponse::class, $this->controller->consent($pending, $decision));
+        $this->assertSame('consent', $this->controller->consent($pending, $decision)->getTemplateName());
         // The same decision is taken again under the mutex, from the table: a request of generation 1 issues nothing.
         $this->assertRefused(fn () => $this->tokens->consent(new \OCA\Mcp\OAuth\AuthorizationRequest(NativeClient::metadata('1'),
             'http://localhost:53421/oauth/callback', 'xyz', self::CHALLENGE, self::RESOURCE, 'mcp'), 'alice'), 'invalid_client');
         $this->assertSame([], $this->store->codes);
-        $this->assertInstanceOf(RedirectResponse::class, $this->controller->consent($this->openConsent(NativeClient::CLIENT_ID,
-            'http://localhost:53421/oauth/callback'), 'allow'), 'a consent opened now works');
+        $this->assertSame('oauth-redirect', $this->controller->consent($this->openConsent(NativeClient::CLIENT_ID,
+            'http://localhost:53421/oauth/callback'), 'allow')->getTemplateName(), 'a consent opened now works');
     }
 }

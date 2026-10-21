@@ -80,7 +80,7 @@ class OAuthController extends Controller {
         }
         $pendingId = bin2hex(random_bytes(16));
         $this->session->set(self::PENDING_KEY, [$pendingId => $authRequest->toArray()]);
-        $response = $this->page([
+        return $this->page([
             'pending' => $pendingId,
             'client' => $authRequest->client->name,
             'clientHost' => $authRequest->client->host(),
@@ -91,21 +91,16 @@ class OAuthController extends Controller {
             'account' => $user->getDisplayName(),
             'action' => $this->urlGenerator->linkToRoute('mcp.o_auth.consent'),
         ]);
-        // The consent POST answers with a redirect to the client; form-action must allow its origin.
-        $csp = new ContentSecurityPolicy();
-        $csp->addAllowedFormActionDomain($this->origin($authRequest->redirectUri));
-        $response->setContentSecurityPolicy($csp);
-        return $response;
     }
 
     /**
      * @param string $pending id of the pending request shown on the consent page
      * @param string $decision allow or deny
-     * @return TemplateResponse|RedirectResponse redirect to the client with code or access_denied; local error page
+     * @return TemplateResponse navigation to the client with code or access_denied; local error page
      */
     #[NoAdminRequired]
     #[UseSession]
-    public function consent(string $pending = '', string $decision = ''): TemplateResponse|RedirectResponse {
+    public function consent(string $pending = '', string $decision = ''): TemplateResponse {
         $stored = $this->session->get(self::PENDING_KEY);
         $this->session->remove(self::PENDING_KEY);
         if (!is_array($stored) || !is_array($stored[$pending] ?? null)) {
@@ -120,7 +115,7 @@ class OAuthController extends Controller {
         }
         $uid = $this->userSession->getUser()->getUID();
         if ($decision !== 'allow') {
-            return new RedirectResponse($authRequest->redirectWith(['error' => 'access_denied'], $this->urls->issuer()));
+            return $this->clientNavigation($authRequest->redirectWith(['error' => 'access_denied'], $this->urls->issuer()));
         }
         try {
             if (!$this->policy->globalEnabled() || !$this->policy->eligible($uid)) {
@@ -133,13 +128,13 @@ class OAuthController extends Controller {
             return $this->page(['error' => 'The authorization request expired. Start the connection again.']);
         } catch (PolicyUnavailable) {
             // Nothing was issued: the client may try again (RFC 6749 §4.1.2.1), the state is never assumed.
-            return new RedirectResponse($authRequest->redirectWith(['error' => 'temporarily_unavailable'], $this->urls->issuer()));
+            return $this->clientNavigation($authRequest->redirectWith(['error' => 'temporarily_unavailable'], $this->urls->issuer()));
         }
         if ($code === null) {
             // The service or the eligibility changed since the check above.
             return $this->page(['blocked' => true, 'client' => $authRequest->client->name]);
         }
-        return new RedirectResponse($authRequest->redirectWith(['code' => $code], $this->urls->issuer()));
+        return $this->clientNavigation($authRequest->redirectWith(['code' => $code], $this->urls->issuer()));
     }
 
     /**
@@ -197,13 +192,16 @@ class OAuthController extends Controller {
     }
 
     /**
-     * Extracts the origin used to scope consent and authorization decisions.
-     *
-     * @param string $uri absolute URI whose scheme, host, and port form the origin
-     * @return string URI origin, defaulting to HTTPS when the scheme is absent
+     * Finish the POST before navigating to the validated callback. Chromium applies the consent form's form-action
+     * to every HTTP redirect, including a callback's redirect to another origin. A new document starts a normal
+     * navigation instead, without relaxing form-action or allowing the callback's unknown downstream origins.
      */
-    private function origin(string $uri): string {
-        $parts = parse_url($uri);
-        return ($parts['scheme'] ?? 'https') . '://' . ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : '');
+    private function clientNavigation(string $target): TemplateResponse {
+        $response = new TemplateResponse($this->appName, 'oauth-redirect', ['target' => $target], TemplateResponse::RENDER_AS_BLANK);
+        $response->setContentSecurityPolicy(new ContentSecurityPolicy());
+        $response->addHeader('Cache-Control', 'no-store');
+        $response->addHeader('Pragma', 'no-cache');
+        $response->addHeader('Referrer-Policy', 'no-referrer');
+        return $response;
     }
 }

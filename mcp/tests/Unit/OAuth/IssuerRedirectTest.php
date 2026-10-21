@@ -152,12 +152,12 @@ final class IssuerRedirectTest extends TestCase {
         $this->assertInstanceOf(TemplateResponse::class, $page);
         $pending = $page->getParams()['pending'];
         $allow = $controller->consent($pending, 'allow');
-        $query = $this->query($allow->getRedirectURL());
+        $query = $this->query($allow->getParams()['target']);
         $this->assertSame(['x' => '1', 'code' => 'CODE', 'iss' => self::ISSUER, 'state' => 'st&te'], $query);
 
         $controller = $this->controller($this->params());
         $pending = $controller->authorize()->getParams()['pending'];
-        $query = $this->query($controller->consent($pending, 'deny')->getRedirectURL());
+        $query = $this->query($controller->consent($pending, 'deny')->getParams()['target']);
         $this->assertSame('access_denied', $query['error']);
         $this->assertSame(self::ISSUER, $query['iss']);
         $this->assertSame('st&te', $query['state']);

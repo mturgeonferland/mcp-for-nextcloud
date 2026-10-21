@@ -14,18 +14,15 @@ use OCA\Deck\Db\Board;
 use OCA\Deck\Db\BoardMapper;
 use OCA\Deck\Db\Card;
 use OCA\Deck\Db\CardMapper;
-use OCA\Deck\Db\LabelMapper;
 use OCA\Deck\Db\Stack;
 use OCA\Deck\Db\StackMapper;
 use OCA\Deck\Model\OptionalNullableValue;
 use OCA\Deck\NoPermissionException;
 use OCA\Deck\Service\AssignmentService;
-use OCA\Deck\Service\AttachmentService;
 use OCA\Deck\Service\BoardService;
 use OCA\Deck\Service\CardService;
 use OCA\Deck\Service\PermissionService;
 use OCA\Deck\Service\StackService;
-use OCA\Deck\Sharing\DeckShareProvider;
 use OCA\Mcp\L10n\Translator;
 use OCA\Mcp\Service\UserTimezone;
 use OCA\Mcp\Tools\ArgumentValidationException;
@@ -33,12 +30,11 @@ use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\Files\File;
 use OCP\ISession;
 use OCP\IUserManager;
-use OCP\Share\Exceptions\ShareNotFound;
 use OCP\Share\IShare;
 use Psr\Container\ContainerInterface;
 
 /**
- * The only class that talks to the Deck app.
+ * Facade for Deck access, sharing native services with focused label, reference, file and dependency gateways.
  *
  * Deck exposes no OCP API, so the services of `OCA\Deck\*` are resolved lazily through the
  * container: injecting them in a constructor would break the `mcp` container on instances where
@@ -56,13 +52,15 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	/** How far back a card counts as the one a failed creation saved, in seconds. */
 	private const CREATED_WITHIN = 120;
 
-	/** -1 uses BoardMapper's request cache; -2 reads all nonnegative timestamps afresh. */
-	private const FRESH_BOARD_SINCE = -2;
-
-	/** @var array<string, object> Services resolved so far in this request. */
-	private array $resolved = [];
+	private DeckServiceContext $services;
+	private CardReferenceFilter $references;
+	private DeckLabelGateway $labels;
+	private DeckCardFileGateway $files;
+	private DeckDependencyGateway $dependencies;
 
 	/**
+	 * Compose focused gateways over one injected, lazy native service context.
+	 *
 	 * @param ContainerInterface $container Nextcloud server container, resolves Deck services by FQCN.
 	 * @param ITimeFactory $time Clock the follow-up reads `overdue` from, so it can be pinned in a test.
 	 * @param UserTimezone|null $zones Timezone of the caller, deciding which day a due date falls on;
@@ -71,11 +69,16 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 *     against the caller before every Deck call, skipped when absent.
 	 */
 	public function __construct(
-		private ContainerInterface $container,
+		ContainerInterface $container,
 		private ITimeFactory $time,
 		private ?UserTimezone $zones = null,
-		private ?ISession $session = null,
+		?ISession $session = null,
 	) {
+		$this->services = new DeckServiceContext($container, $session);
+		$this->references = new CardReferenceFilter($this->services);
+		$this->labels = new DeckLabelGateway($this->services, $this->references);
+		$this->files = new DeckCardFileGateway($this->services, $this->references);
+		$this->dependencies = new DeckDependencyGateway($this->services, $this->references);
 	}
 
 	/**
@@ -83,7 +86,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 */
 	public function listBoards(string $userId): array {
 		/** @var BoardService $boardService */
-		$boardService = $this->bindUser($userId);
+		$boardService = $this->services->bindUser($userId);
 
 		// `since: -1` disables the change-tracking filter; `fullDetails: false` skips the settings and session enrichment.
 		return $boardService->findAll(-1, false, false);
@@ -91,96 +94,28 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 
 	/** {@inheritDoc} */
 	public function listLabels(string $userId, int $boardId, int $limit, int $offset): array {
-		$boards = $this->bindUser($userId);
-		$this->service(PermissionService::class)->checkPermission(null, $boardId, Acl::PERMISSION_READ);
-		// BoardService::find() and PermissionService retain board entities in the request. The listing queries anew.
-		if (!in_array($boardId, array_map(static fn (Board $b): int => (int)$b->getId(), array_filter(
-			$boards->findAll(self::FRESH_BOARD_SINCE, false, true),
-			static fn (Board $b): bool => $b->getDeletedAt() === 0,
-		)), true)) {
-			throw new NoPermissionException('Permission denied');
-		}
-		return array_values($this->service(LabelMapper::class)->findAll($boardId, $limit, $offset));
+		return $this->labels->listLabels($userId, $boardId, $limit, $offset);
 	}
-
 
 	/** {@inheritDoc} */
 	public function cardLabelState(string $userId, int $cardId, array $requested): array {
-		$boards = $this->bindUser($userId);
-		$mapper = $this->service(CardMapper::class);
-		$permissions = $this->service(PermissionService::class);
-		$permissions->checkPermission($mapper, $cardId, Acl::PERMISSION_READ);
-		$permissions->checkPermission($mapper, $cardId, Acl::PERMISSION_EDIT);
-		$card = $mapper->find($cardId);
-		$boardId = (int)$mapper->findBoardId($cardId);
-		$board = null;
-		foreach ($boards->findAll(self::FRESH_BOARD_SINCE, false, true) as $candidate) {
-			if ((int)$candidate->getId() === $boardId && (int)$candidate->getDeletedAt() === 0) {
-				$board = $candidate;
-				break;
-			}
-		}
-		if ($board === null || (int)$card->getDeletedAt() !== 0 || $card->getArchived() || $board->getArchived()) {
-			throw new DeckRefusalException(DeckMessages::errorLabelsUnavailable());
-		}
-		$stackIds = array_map(static fn (Stack $s): int => (int)$s->getId(),
-			$this->service(StackMapper::class)->findAll($boardId));
-		if (!in_array((int)$card->getStackId(), $stackIds, true)) {
-			throw new DeckRefusalException(DeckMessages::errorLabelsUnavailable());
-		}
-		$catalog = [];
-		foreach ($this->service(LabelMapper::class)->findAll($boardId) as $label) {
-			if ((int)$label->getBoardId() === $boardId) {
-				$catalog[(int)$label->getId()] = ['id' => (int)$label->getId(), 'boardId' => $boardId,
-					'title' => (string)$label->getTitle(), 'color' => (string)$label->getColor()];
-			}
-		}
-		$assigned = array_map(static fn ($label): int => (int)$label->getId(), $card->getLabels() ?? []);
-		sort($assigned);
-		// A native cross-board move may leave old links. Preserve them without exposing their IDs or metadata.
-		// Only explicitly requested labels must belong to this board; foreign links remain HMAC-only state.
-		foreach ($requested as $id) {
-			if (!isset($catalog[$id])) {
-				throw new DeckRefusalException(DeckMessages::errorLabelsUnavailable());
-			}
-		}
-		$select = static function (array $ids) use ($catalog): array {
-			$ids = array_values(array_unique($ids));
-			sort($ids);
-			return array_map(static fn (int $id): array => $catalog[$id], $ids);
-		};
-		$owner = (string)$board->getOwner();
-		return ['card' => $this->filterCardReferences($userId, $card), 'boardId' => $boardId,
-			'board' => ['owner' => $owner, 'ownerDisplayName' => $this->displayName($owner), 'name' => (string)$board->getTitle()],
-			'labels' => $select(array_values(array_intersect($assigned, array_keys($catalog)))),
-			'foreignAssigned' => array_values(array_diff($assigned, array_keys($catalog))),
-			'requested' => $select($requested)];
+		return $this->labels->cardLabelState($userId, $cardId, $requested);
 	}
 
 	/** {@inheritDoc} */
 	public function changeCardLabel(string $userId, int $cardId, int $labelId, bool $assign,
 		array $requested, array $expected): void {
-		$state = $this->cardLabelState($userId, $cardId, $requested);
-		if (!in_array($labelId, $requested, true) || CardLabelChanges::snapshot($state) !== $expected) {
-			throw new DeckConflictException(DeckMessages::labelPlanChanged());
-		}
-		$cards = $this->service(CardService::class);
-		// Deck v1.16.8–v1.19.0: each call changes one link; removeLabel itself lacks the foreign-board guard above.
-		if ($assign) {
-			$cards->assignLabel($cardId, $labelId);
-		} else {
-			$cards->removeLabel($cardId, $labelId);
-		}
+		$this->labels->changeCardLabel($userId, $cardId, $labelId, $assign, $requested, $expected);
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	public function listStacks(string $userId, int $boardId): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var StackService $stackService */
-		$stackService = $this->service(StackService::class);
+		$stackService = $this->services->get(StackService::class);
 
 		// `StackService::findAll()` checks PERMISSION_READ on the board before listing its stacks.
 		$stacks = $stackService->findAll($boardId);
@@ -190,7 +125,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 				$safeStack = clone $stack;
 				$safeStack->setCards(array_map(
 					function (Card $card) use ($userId, &$referenceView): Card {
-						return $this->filterCardReferences($userId, $card, $referenceView);
+						return $this->references->filter($userId, $card, $referenceView);
 					},
 					$stack->getCards(),
 				));
@@ -204,14 +139,14 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function listCards(string $userId, int $stackId, int $limit, int $offset): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 		/** @var CardMapper $cardMapper */
-		$cardMapper = $this->service(CardMapper::class);
+		$cardMapper = $this->services->get(CardMapper::class);
 
 		// CardMapper::findAll() is a plain query with no ACL at all, so the check comes first.
 		$permissionService->checkPermission($stackMapper, $stackId, Acl::PERMISSION_READ);
@@ -226,7 +161,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 
 		return [
 			'items' => array_map(function (Card $card) use ($userId, &$referenceView): Card {
-				return $this->filterCardReferences($userId, $card, $referenceView);
+				return $this->references->filter($userId, $card, $referenceView);
 			}, $items),
 			'boardId' => $stackMapper->findBoardId($stackId),
 		];
@@ -242,9 +177,9 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		$zone = $this->zone($userId);
 
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 		/** @var CardMapper $cardMapper */
-		$cardMapper = $this->service(CardMapper::class);
+		$cardMapper = $this->services->get(CardMapper::class);
 
 		$truncated = $managed['capped'];
 		$items = [];
@@ -284,7 +219,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 					continue;
 				}
 
-				$items[] = ['card' => $this->filterCardReferences($userId, $card, $referenceView), 'boardId' => (int)$board->getId()];
+				$items[] = ['card' => $this->references->filter($userId, $card, $referenceView), 'boardId' => (int)$board->getId()];
 			}
 		}
 
@@ -300,26 +235,26 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function findCard(string $userId, int $cardId): Card {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var CardService $cardService */
-		$cardService = $this->service(CardService::class);
+		$cardService = $this->services->get(CardService::class);
 
 		// `CardService::find()` checks PERMISSION_READ and refuses a deleted card.
-		return $this->filterCardReferences($userId, $cardService->find($cardId));
+		return $this->references->filter($userId, $cardService->find($cardId));
 	}
 
 	/** {@inheritDoc} */
 	public function validateAssignees(string $userId, int $stackId, array $assignees): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 		/** @var PermissionService $permissions */
-		$permissions = $this->service(PermissionService::class);
+		$permissions = $this->services->get(PermissionService::class);
 		/** @var StackMapper $stacks */
-		$stacks = $this->service(StackMapper::class);
+		$stacks = $this->services->get(StackMapper::class);
 		$permissions->checkPermission($stacks, $stackId, Acl::PERMISSION_EDIT);
 		$boardId = $stacks->findBoardId($stackId);
 		/** @var IUserManager $users */
-		$users = $this->service(IUserManager::class);
+		$users = $this->services->get(IUserManager::class);
 		$out = [];
 		foreach (CardInput::assignees($assignees) as $uid) {
 			$user = $users->get($uid);
@@ -335,17 +270,17 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 
 	/** {@inheritDoc} */
 	public function assignCardUser(string $userId, int $cardId, string $assignee): Assignment {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 		/** @var AssignmentService $assignments */
-		$assignments = $this->service(AssignmentService::class);
+		$assignments = $this->services->get(AssignmentService::class);
 		return $assignments->assignUser($cardId, $assignee);
 	}
 
 	/** {@inheritDoc} */
 	public function unassignCardUser(string $userId, int $cardId, string $assignee): Assignment {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 		/** @var AssignmentService $assignments */
-		$assignments = $this->service(AssignmentService::class);
+		$assignments = $this->services->get(AssignmentService::class);
 		// Deck v1.17.5: `unassignUser(int $cardId, string $userId, int $type = 0)`; the user type is the default.
 		return $assignments->unassignUser($cardId, $assignee);
 	}
@@ -354,27 +289,27 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function createCard(string $userId, int $stackId, string $title, string $description, ?string $duedate, ?int $order = null): Card {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var CardService $cardService */
-		$cardService = $this->service(CardService::class);
+		$cardService = $this->services->get(CardService::class);
 
 		// `type` is free text in Deck (only length-checked), so the tools always write `note`.
-		return $this->filterCardReferences($userId, $cardService->create($title, $stackId, 'note', $order ?? self::LAST_ORDER, $userId, $description, $this->instant($userId, $duedate)));
+		return $this->references->filter($userId, $cardService->create($title, $stackId, 'note', $order ?? self::LAST_ORDER, $userId, $description, $this->instant($userId, $duedate)));
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	public function updateCard(string $userId, Card $card, string $title, string $description, ?string $duedate): Card {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var CardService $cardService */
-		$cardService = $this->service(CardService::class);
+		$cardService = $this->services->get(CardService::class);
 
 		// Deck v1.17.5 nulls `done` when the optional argument is left out, so the current value is
 		// sent back wrapped to preserve it; every other field the form requires comes from the card.
-		return $this->filterCardReferences($userId, $cardService->update(
+		return $this->references->filter($userId, $cardService->update(
 			$card->getId(),
 			$title,
 			$card->getStackId(),
@@ -430,16 +365,16 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function moveCard(string $userId, int $cardId, int $stackId, ?int $order): Card {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 		/** @var CardMapper $cardMapper */
-		$cardMapper = $this->service(CardMapper::class);
+		$cardMapper = $this->services->get(CardMapper::class);
 		/** @var CardService $cardService */
-		$cardService = $this->service(CardService::class);
+		$cardService = $this->services->get(CardService::class);
 
 		if ($order === null) {
 			// Reading the destination stack is an access of its own: check READ before the query.
@@ -457,32 +392,32 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 			}
 		}
 
-		return $this->filterCardReferences($userId, $moved ?? $cardService->find($cardId));
+		return $this->references->filter($userId, $moved ?? $cardService->find($cardId));
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	public function deleteCard(string $userId, int $cardId): Card {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var CardService $cardService */
-		$cardService = $this->service(CardService::class);
+		$cardService = $this->services->get(CardService::class);
 
 		// Soft delete: Deck stamps `deleted_at` and keeps the row.
-		return $this->filterCardReferences($userId, $cardService->delete($cardId));
+		return $this->references->filter($userId, $cardService->delete($cardId));
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	public function stackOwnership(string $userId, int $stackId): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 
 		// Check first: Deck answers a missing or unreadable stack with the same exception it uses
 		// for a denied one, so no owner or title is read before the caller may write there.
@@ -495,12 +430,12 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function cardOwnership(string $userId, int $cardId): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var CardMapper $cardMapper */
-		$cardMapper = $this->service(CardMapper::class);
+		$cardMapper = $this->services->get(CardMapper::class);
 
 		// The same check `CardService::update()` and `CardService::delete()` run, taken before the
 		// read so a caller without edit access never learns who owns the board.
@@ -513,12 +448,12 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function cardBoardId(string $userId, int $cardId): int {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var CardMapper $cardMapper */
-		$cardMapper = $this->service(CardMapper::class);
+		$cardMapper = $this->services->get(CardMapper::class);
 
 		// `CardMapper::findBoardId()` is a plain query, so the read check the card itself needs comes first.
 		$permissionService->checkPermission($cardMapper, $cardId, Acl::PERMISSION_READ);
@@ -530,7 +465,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function createBoard(string $userId, string $title, string $color): Board {
-		$boardService = $this->bindUser($userId);
+		$boardService = $this->services->bindUser($userId);
 
 		// Deck v1.17.5 `create(string $title, string $userId, string $color)`; it adds the four default labels.
 		return $boardService->create($title, $userId, $color);
@@ -540,16 +475,16 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function createStack(string $userId, int $boardId, string $title, ?int $order): Stack {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var StackService $stackService */
-		$stackService = $this->service(StackService::class);
+		$stackService = $this->services->get(StackService::class);
 
 		if ($order === null) {
 			/** @var PermissionService $permissionService */
-			$permissionService = $this->service(PermissionService::class);
+			$permissionService = $this->services->get(PermissionService::class);
 			/** @var StackMapper $stackMapper */
-			$stackMapper = $this->service(StackMapper::class);
+			$stackMapper = $this->services->get(StackMapper::class);
 			// `StackService::create()` needs PERMISSION_MANAGE; reading the lists is an access of its own,
 			// so the same check comes before the query.
 			$permissionService->checkPermission(null, $boardId, Acl::PERMISSION_MANAGE);
@@ -568,10 +503,10 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function boardOwnership(string $userId, int $boardId): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 
 		// Check first: the owner and the title are read only for somebody who may manage the board.
 		$permissionService->checkPermission(null, $boardId, Acl::PERMISSION_MANAGE);
@@ -583,12 +518,12 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function stackCardCount(string $userId, int $stackId): int {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 
 		// The same check `StackService::delete()` runs, taken before any card is read.
 		$permissionService->checkPermission($stackMapper, $stackId, Acl::PERMISSION_MANAGE);
@@ -600,10 +535,10 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function boardCardCount(string $userId, int $boardId): int {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 
 		$permissionService->checkPermission(null, $boardId, Acl::PERMISSION_MANAGE);
 
@@ -636,7 +571,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		}
 
 		/** @var StackService $stackService */
-		$stackService = $this->service(StackService::class);
+		$stackService = $this->services->get(StackService::class);
 
 		// Soft delete: Deck stamps `deleted_at` on the list and keeps the row.
 		$stack = $stackService->delete($stackId);
@@ -667,7 +602,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		}
 
 		/** @var BoardService $boardService */
-		$boardService = $this->service(BoardService::class);
+		$boardService = $this->services->get(BoardService::class);
 
 		// Soft delete: Deck stamps `deleted_at` on the board, which leaves the lists of the web interface and
 		// can be brought back from the Deck deleted items.
@@ -754,32 +689,32 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * `CardMapper::find()` runs a fresh query and, unlike `CardService::find()`, answers a deleted card too.
 	 */
 	public function cardState(string $userId, int $cardId): Card {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var CardMapper $cardMapper */
-		$cardMapper = $this->service(CardMapper::class);
+		$cardMapper = $this->services->get(CardMapper::class);
 
 		// Deck v1.17.5 `checkPermission($mapper, $id, $permission, $userId, $allowDeletedCard)`: a deleted card is
 		// exactly what a delete leaves, so it stays readable here.
 		$permissionService->checkPermission($cardMapper, $cardId, Acl::PERMISSION_READ, null, true);
 
-		return $this->filterCardReferences($userId, $cardMapper->find($cardId, false));
+		return $this->references->filter($userId, $cardMapper->find($cardId, false));
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	public function findCreatedCard(string $userId, int $stackId, string $title, array $excludeIds = []): ?Card {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 		/** @var CardMapper $cardMapper */
-		$cardMapper = $this->service(CardMapper::class);
+		$cardMapper = $this->services->get(CardMapper::class);
 
 		$permissionService->checkPermission($stackMapper, $stackId, Acl::PERMISSION_READ);
 
@@ -795,21 +730,21 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 			}
 		}
 
-		return $found === null ? null : $this->filterCardReferences($userId, $found);
+		return $found === null ? null : $this->references->filter($userId, $found);
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	public function cardAssignments(string $userId, int $cardId): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var AssignmentMapper $assignmentMapper */
-		$assignmentMapper = $this->service(AssignmentMapper::class);
+		$assignmentMapper = $this->services->get(AssignmentMapper::class);
 
-		$permissionService->checkPermission($this->service(CardMapper::class), $cardId, Acl::PERMISSION_READ);
+		$permissionService->checkPermission($this->services->get(CardMapper::class), $cardId, Acl::PERMISSION_READ);
 
 		return array_values($assignmentMapper->findIn([$cardId]));
 	}
@@ -818,12 +753,12 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * {@inheritDoc}
 	 */
 	public function stacksOf(string $userId, int $boardId): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 
 		$permissionService->checkPermission(null, $boardId, Acl::PERMISSION_READ);
 
@@ -837,12 +772,12 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * it even when the update never reached the database, so the lists are queried again instead.
 	 */
 	public function deletedStack(string $userId, int $stackId): ?Stack {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 
 		$boardId = $stackMapper->findBoardId($stackId) ?? throw new NoPermissionException('Permission denied');
 		$permissionService->checkPermission(null, $boardId, Acl::PERMISSION_READ);
@@ -868,256 +803,53 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * Only the caller's own boards are read, so no ACL check is needed.
 	 */
 	public function ownedBoards(string $userId): array {
-		$this->bindUser($userId);
+		$this->services->bindUser($userId);
 
 		/** @var BoardMapper $boardMapper */
-		$boardMapper = $this->service(BoardMapper::class);
+		$boardMapper = $this->services->get(BoardMapper::class);
 
 		return array_values($boardMapper->findAllByOwner($userId) ?: []);
 	}
 
 	/** {@inheritDoc} Parent listings are fresh, scoped only to this call. */
 	public function cardFileContext(string $userId, int $cardId, bool $edit): array {
-		$view = [];
-		$source = $this->referenceTarget($userId, $cardId, $view);
-		if ($source === null) {
-			throw new NoPermissionException('Permission denied');
-		}
-		$board = $view['boards'][$source['boardId']];
-		if ($edit) {
-			$this->service(PermissionService::class)->checkPermission($this->service(CardMapper::class), $cardId, Acl::PERMISSION_EDIT);
-			if ($source['card']->getArchived() || $board->getArchived()) {
-				throw new DeckRefusalException(DeckMessages::fileSourceInactive());
-			}
-		}
-		$owner = (string)$board->getOwner();
-		return $source + ['board' => ['owner' => $owner, 'ownerDisplayName' => $this->displayName($owner),
-			'name' => (string)$board->getTitle()]];
+		return $this->files->cardFileContext($userId, $cardId, $edit);
 	}
 
 	/** {@inheritDoc} Unlike AttachmentService::findAll, this never loads legacy deck_file attachments. */
 	public function cardFileShares(string $userId, int $cardId): array {
-		$this->cardFileContext($userId, $cardId, false);
-		return array_values($this->service(DeckShareProvider::class)->getSharedWithByType($cardId, IShare::TYPE_DECK, -1, 0));
+		return $this->files->cardFileShares($userId, $cardId);
 	}
 
 	/** {@inheritDoc} An unreadable/missing/wrong-card association has no public metadata. */
 	public function cardFileShare(string $userId, int $cardId, int $attachmentId): ?IShare {
-		$this->cardFileContext($userId, $cardId, false);
-		try {
-			$share = $this->service(DeckShareProvider::class)->getShareById((string)$attachmentId);
-		} catch (ShareNotFound) {
-			return null;
-		}
-		if ($share->getShareType() !== IShare::TYPE_DECK || (string)$share->getSharedWith() !== (string)$cardId
-			|| (int)$share->getId() !== $attachmentId) {
-			throw new NoPermissionException('Permission denied');
-		}
-		return $share;
+		return $this->files->cardFileShare($userId, $cardId, $attachmentId);
 	}
 
 	/** {@inheritDoc} Only the boolean for the already authorized ID is returned. */
 	public function cardFileShareExists(string $userId, int $cardId, int $attachmentId, File $node): bool {
-		$this->cardFileContext($userId, $cardId, false);
-		foreach ($this->service(DeckShareProvider::class)->getSharesByPath($node) as $share) {
-			if ((int)$share->getId() === $attachmentId) {
-				if ((string)$share->getSharedWith() !== (string)$cardId || $share->getShareType() !== IShare::TYPE_DECK) {
-					throw new NoPermissionException('Permission denied');
-				}
-				return true;
-			}
-		}
-		return false;
+		return $this->files->cardFileShareExists($userId, $cardId, $attachmentId, $node);
 	}
 
 	/** {@inheritDoc} The 'file' type is literal; this path cannot dispatch legacy file deletion. */
 	public function unlinkCardFile(string $userId, int $cardId, int $attachmentId, array $expected): void {
-		$this->cardFileContext($userId, $cardId, true);
-		$share = $this->cardFileShare($userId, $cardId, $attachmentId);
-		if ($share === null || CardFiles::identity($share) !== $expected) {
-			throw new DeckConflictException(DeckMessages::filePlanChanged());
-		}
-		$this->service(AttachmentService::class)->delete($cardId, $attachmentId, 'file');
+		$this->files->unlinkCardFile($userId, $cardId, $attachmentId, $expected);
 	}
 
 	/** {@inheritDoc} Native adjacency is loaded only after READ, without attachment enrichment. */
 	public function dependencyNode(string $userId, int $cardId, ?array &$view = null): array {
-		if (!property_exists(Card::class, 'dependentCards') || !method_exists(CardMapper::class, 'findDependenciesForCards')) {
-			throw new DeckRefusalException(DeckMessages::dependenciesUnavailable());
-		}
-		$view ??= [];
-		$source = $this->referenceTarget($userId, $cardId, $view);
-		if ($source === null) {
-			throw new NoPermissionException('Permission denied');
-		}
-		$targets = [];
-		$card = clone $source['card'];
-		$adjacency = $this->service(CardMapper::class)->findDependenciesForCards([$cardId]);
-		$card->setDependentCards($adjacency[$cardId] ?? []);
-		$card = $this->filterCardReferences($userId, $card, $view, true, $targets);
-		usort($targets, static fn (array $a, array $b): int => $a['card']->getId() <=> $b['card']->getId());
-		return ['card' => $card, 'boardId' => $source['boardId'], 'targets' => $targets];
+		return $this->dependencies->dependencyNode($userId, $cardId, $view);
 	}
 
 	/** {@inheritDoc} Hidden associations and lastModified never enter a plan fingerprint. */
 	public function dependencyChangeState(string $userId, int $originId, int $targetId, bool $assign,
 		bool $checkCycle = true): array {
-		if ($originId === $targetId) {
-			throw new DeckRefusalException(DeckMessages::dependencyCycle());
-		}
-		$view = [];
-		$origin = $this->dependencyNode($userId, $originId, $view);
-		$this->bindUser($userId);
-		$this->service(PermissionService::class)->checkPermission($this->service(CardMapper::class), $originId, Acl::PERMISSION_EDIT);
-		$target = $this->referenceTarget($userId, $targetId, $view);
-		if ($target === null) {
-			throw new NoPermissionException('Permission denied');
-		}
-		foreach ([$origin, $target] as $node) {
-			if ($node['card']->getArchived() || $view['boards'][$node['boardId']]->getArchived()) {
-				throw new DeckRefusalException(DeckMessages::dependencyInactive());
-			}
-		}
-		$present = in_array($targetId, array_map(
-			static fn (array $node): int => (int)$node['card']->getId(), $origin['targets']), true);
-		$graph = null;
-		if ($assign && !$present && $checkCycle) {
-			$graph = (new DependencyGraph($this))->read($userId, $targetId, $view);
-			foreach ($graph['nodes'] as $node) {
-				if ((int)$node['card']->getId() === $originId) {
-					throw new DeckRefusalException(DeckMessages::dependencyCycle());
-				}
-			}
-		}
-		$board = $view['boards'][$origin['boardId']];
-		$owner = (string)$board->getOwner();
-		return ['origin' => $origin, 'target' => $target, 'present' => $present, 'graph' => $graph,
-			'board' => ['owner' => $owner, 'ownerDisplayName' => $this->displayName($owner), 'name' => (string)$board->getTitle()]];
+		return $this->dependencies->dependencyChangeState($userId, $originId, $targetId, $assign, $checkCycle);
 	}
 
 	/** {@inheritDoc} Native APIs still leave a check-to-write race, documented in every plan. */
 	public function changeDependency(string $userId, int $originId, int $targetId, bool $assign, array $expected): void {
-		$state = $this->dependencyChangeState($userId, $originId, $targetId, $assign);
-		if (DependencyChange::snapshot($state) !== $expected) {
-			throw new DeckConflictException(DeckMessages::dependencyPlanChanged());
-		}
-		if ($state['present'] === $assign) {
-			return;
-		}
-		$cards = $this->service(CardService::class);
-		if ($assign) {
-			$cards->assignDependentCard($originId, $targetId);
-		} else {
-			$cards->removeDependentCard($originId, $targetId);
-		}
-	}
-
-	/**
-	 * Single reference boundary for every Card returned by this gateway. Hidden/deleted targets have no marker.
-	 * The optional view belongs to this public operation only; no property retains it across calls.
-	 * @param string $userId Authenticated caller.
-	 * @param Card $card Source card, whose READ has already been checked.
-	 * @param array|null $view Parent listings memoized inside one public call.
-	 * @param bool $strict True for graph reads: uncertain DB/DI failures abort instead of claiming completeness.
-	 * @param array|null $targets Receives fresh readable target cards and board IDs; never raw hidden IDs.
-	 * @return Card Card with only readable native references, without poisoning a cached native entity.
-	 * @throws \Throwable In strict mode for an uncertain lookup.
-	 */
-	private function filterCardReferences(string $userId, Card $card, ?array &$view = null,
-		bool $strict = false, ?array &$targets = null): Card {
-		if (!property_exists($card, 'dependentCards')) {
-			return $card;
-		}
-		$ids = $card->getDependentCards() ?? [];
-		if ($ids === []) {
-			return $card;
-		}
-		$view ??= [];
-		$readable = [];
-		foreach (array_unique($ids) as $id) {
-			try {
-				$target = $this->referenceTarget($userId, (int)$id, $view);
-				if ($target !== null) {
-					$readable[] = (int)$id;
-					if ($targets !== null) {
-						$targets[] = $target;
-					}
-				}
-			} catch (NoPermissionException|\OCP\AppFramework\Db\DoesNotExistException) {
-				// A denied/missing/deleted target never becomes an edge, count or handle, for any role.
-			} catch (\Throwable $e) {
-				if ($strict) {
-					throw $e;
-				}
-				// Existing card readers remain fail closed: no failed destination is serialized.
-			}
-		}
-		$card = clone $card;
-		$card->setDependentCards(array_values(array_unique($readable)));
-		return $card;
-	}
-
-	/**
-	 * @param string $userId Authenticated caller; native permissions are refreshed on every target.
-	 * @param int $id Candidate card ID from the native adjacency, never an ACL bypass query.
-	 * @param array $view Fresh parent listings shared only inside one public operation.
-	 * @return array{card: Card, boardId: int}|null A readable card with active parents, or a deleted/missing parent.
-	 * @throws \Throwable When READ is denied or lookup fails; the caller distinguishes denial from uncertainty.
-	 */
-	private function referenceTarget(string $userId, int $id, array &$view): ?array {
-		$boards = $this->bindUser($userId);
-		$mapper = $this->service(CardMapper::class);
-		$this->service(PermissionService::class)->checkPermission($mapper, $id, Acl::PERMISSION_READ);
-		$target = $mapper->find($id, false);
-		if ($target->getDeletedAt() !== 0) {
-			return null;
-		}
-		if (!isset($view['boards'])) {
-			$view['boards'] = [];
-			foreach ($boards->findAll(self::FRESH_BOARD_SINCE, false, true) as $board) {
-				if ($board->getDeletedAt() === 0) {
-					$view['boards'][(int)$board->getId()] = $board;
-				}
-			}
-		}
-		$boardId = $mapper->findBoardId($id);
-		if (!isset($view['boards'][$boardId])) {
-			return null;
-		}
-		$view['stacks'][$boardId] ??= array_fill_keys(array_map(
-			static fn (Stack $stack): int => (int)$stack->getId(),
-			$this->service(StackMapper::class)->findAll($boardId),
-		), true);
-		return isset($view['stacks'][$boardId][(int)$target->getStackId()])
-			? ['card' => $target, 'boardId' => (int)$boardId] : null;
-	}
-
-	/**
-	 * Resolves the Deck board service and binds it to the caller.
-	 *
-	 * `BoardService::setUserId()` also calls `PermissionService::setUserId()`, which clears the
-	 * permission cache, so every Deck ACL decision in this request is taken for the authenticated
-	 * user rather than for any state left over by the session.
-	 *
-	 * `setUserId()` exists on the board service only: `CardService`, `AssignmentService` and the
-	 * `ActivityManager` keep the `userId` the DI container injected, which is `ISession::get('user_id')`.
-	 * When it is not the caller, Deck v1.17.5 writes the card and then fails in `enrichCards()`, so the
-	 * session is checked first and the call is refused before anything of the Deck runs.
-	 *
-	 * @param string $userId UID of the authenticated caller.
-	 * @return BoardService Deck board service bound to that user.
-	 * @throws DeckSessionException When the session the Deck services read is not the caller's.
-	 */
-	private function bindUser(string $userId): BoardService {
-		if ($this->session !== null && $this->session->get('user_id') !== $userId) {
-			throw new DeckSessionException('The session user is not the authenticated caller');
-		}
-
-		/** @var BoardService $boardService */
-		$boardService = $this->service(BoardService::class);
-		$boardService->setUserId($userId);
-
-		return $boardService;
+		$this->dependencies->changeDependency($userId, $originId, $targetId, $assign, $expected);
 	}
 
 	/**
@@ -1135,7 +867,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 */
 	private function managedBoards(string $userId, ?int $boardId): array {
 		/** @var PermissionService $permissionService */
-		$permissionService = $this->service(PermissionService::class);
+		$permissionService = $this->services->get(PermissionService::class);
 
 		$boards = $this->listBoards($userId);
 		if ($boardId !== null) {
@@ -1198,7 +930,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		}
 
 		/** @var AssignmentMapper $assignmentMapper */
-		$assignmentMapper = $this->service(AssignmentMapper::class);
+		$assignmentMapper = $this->services->get(AssignmentMapper::class);
 
 		$byCardId = [];
 		foreach ($assignmentMapper->findIn(array_map(static fn (Card $card): int => $card->getId(), $cards)) as $assignment) {
@@ -1236,20 +968,6 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	}
 
 	/**
-	 * Resolves a Deck service once per request.
-	 *
-	 * @param string $class FQCN of the Deck class, used as the cache key.
-	 * @return object The resolved Deck service.
-	 */
-	private function service(string $class): object {
-		if (!isset($this->resolved[$class])) {
-			$this->resolved[$class] = $this->container->get($class);
-		}
-
-		return $this->resolved[$class];
-	}
-
-	/**
 	 * Owner, display name and title of a board, read after its permission check succeeded.
 	 *
 	 * @param mixed $boardId Board id resolved by a Deck mapper, or null when the entity is gone.
@@ -1264,7 +982,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		}
 
 		/** @var BoardService $boardService */
-		$boardService = $this->service(BoardService::class);
+		$boardService = $this->services->get(BoardService::class);
 		// `fullDetails: false` skips the ACL and session enrichment; `allowDeleted: true` keeps an
 		// archived board answerable here, because the write itself is what refuses it.
 		$board = $boardService->find((int)$boardId, false, true);
@@ -1272,7 +990,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 
 		return [
 			'owner' => $owner,
-			'ownerDisplayName' => $this->displayName($owner),
+			'ownerDisplayName' => $this->services->displayName($owner),
 			'name' => (string)$board->getTitle(),
 		];
 	}
@@ -1288,7 +1006,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 */
 	private function cardsInStack(int $stackId): int {
 		/** @var CardMapper $cardMapper */
-		$cardMapper = $this->service(CardMapper::class);
+		$cardMapper = $this->services->get(CardMapper::class);
 
 		return count($cardMapper->findAll($stackId) ?: []) + count($cardMapper->findAllArchived($stackId) ?: []);
 	}
@@ -1301,7 +1019,7 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 */
 	private function cardsInBoard(int $boardId): int {
 		/** @var StackMapper $stackMapper */
-		$stackMapper = $this->service(StackMapper::class);
+		$stackMapper = $this->services->get(StackMapper::class);
 
 		$cards = 0;
 		foreach ($stackMapper->findAll($boardId) as $stack) {
@@ -1309,19 +1027,6 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		}
 
 		return $cards;
-	}
-
-	/**
-	 * Display name of a user, falling back to the uid when the account is gone or has none.
-	 *
-	 * @param string $userId UID whose name is shown to the caller.
-	 * @return string Name to put in a confirmation message.
-	 */
-	private function displayName(string $userId): string {
-		/** @var IUserManager $userManager */
-		$userManager = $this->service(IUserManager::class);
-
-		return $userManager->get($userId)?->getDisplayName() ?: $userId;
 	}
 
 	/**

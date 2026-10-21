@@ -305,27 +305,27 @@ final class NextcloudApiUsage {
         'OCA\\Deck\\Db\\CardMapper::findDependenciesForCards' => [
             'missing' => ['31', '32', '33'],
             'fallback' => 'OCA\\Deck\\Db\\Card::getId',
-            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+            'by' => \OCA\Mcp\Tools\Deck\DeckDependencyGateway::class,
         ],
         'OCA\\Deck\\Service\\CardService::assignDependentCard' => [
             'missing' => ['31', '32', '33'],
             'fallback' => 'OCA\\Deck\\Db\\Card::getId',
-            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+            'by' => \OCA\Mcp\Tools\Deck\DeckDependencyGateway::class,
         ],
         'OCA\\Deck\\Service\\CardService::removeDependentCard' => [
             'missing' => ['31', '32', '33'],
             'fallback' => 'OCA\\Deck\\Db\\Card::getId',
-            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+            'by' => \OCA\Mcp\Tools\Deck\DeckDependencyGateway::class,
         ],
         'OCA\\Deck\\Db\\Card::getDependentCards' => [
             'missing' => ['31', '32', '33'],
             'fallback' => 'OCA\\Deck\\Db\\Card::getId',
-            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+            'by' => \OCA\Mcp\Tools\Deck\CardReferenceFilter::class,
         ],
         'OCA\\Deck\\Db\\Card::setDependentCards' => [
             'missing' => ['31', '32', '33'],
             'fallback' => 'OCA\\Deck\\Db\\Card::getId',
-            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+            'by' => \OCA\Mcp\Tools\Deck\CardReferenceFilter::class,
         ],
         'OCA\\Deck\\Db\\Card::getStartdate' => [
             'missing' => ['31', '32', '33'],
@@ -339,6 +339,7 @@ final class NextcloudApiUsage {
             'elsewhere' => [
                 'Tools/Deck/CardFormatter.php' => 'OCA\\Deck\\Db\\Board::getColor',
                 'Tools/Deck/Handler/ListLabelsHandler.php' => 'OCA\\Deck\\Db\\Label::getColor',
+                'Tools/Deck/DeckLabelGateway.php' => 'OCA\\Deck\\Db\\Label::getColor',
             ],
         ],
         // Up to Talk 23 Room::getLobbyState() opens a lobby whose timer has passed by itself.

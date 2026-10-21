@@ -11,6 +11,7 @@ use OCA\Mcp\AppInfo\Application;
 use OCA\Mcp\Tools\Calendar\CalendarStore;
 use OCA\Mcp\Tools\Calendar\DavCalendarStore;
 use OCA\Mcp\Tools\Deck\DeckGatewayInterface;
+use OCA\Mcp\Tools\Deck\DeckServiceContext;
 use OCA\Mcp\Tools\Deck\DeckServiceGateway;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Utility\ITimeFactory;
@@ -81,6 +82,11 @@ final class ApplicationRegistrationTest extends TestCase {
         $this->assertSame([[\OCA\Mcp\Middleware\DeferredFlushMiddleware::class, false]], $middlewares);
     }
 
+    /**
+     * Verify that the factory supplies both timezone and native session to the composed gateway.
+     *
+     * @return void
+     */
     public function testTheDeckGatewayFactoryBuildsTheGatewayWithItsClockAndTimezone(): void {
         $factories = $this->registeredFactories();
         $this->assertArrayHasKey(DeckGatewayInterface::class, $factories);
@@ -92,7 +98,8 @@ final class ApplicationRegistrationTest extends TestCase {
         $zones = (new \ReflectionProperty(DeckServiceGateway::class, 'zones'))->getValue($gateway);
         $this->assertNotNull($zones);
         // Without the session the check that refuses a Deck write under another `userId` is skipped.
-        $this->assertNotNull((new \ReflectionProperty(DeckServiceGateway::class, 'session'))->getValue($gateway));
+        $services = (new \ReflectionProperty(DeckServiceGateway::class, 'services'))->getValue($gateway);
+        $this->assertNotNull((new \ReflectionProperty(DeckServiceContext::class, 'session'))->getValue($services));
     }
 
     public function testCalendarDavIsBoundToTheDispatcherAndReaderStaysLazy(): void {

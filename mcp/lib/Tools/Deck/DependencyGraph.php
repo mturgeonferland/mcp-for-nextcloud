@@ -14,12 +14,14 @@ final class DependencyGraph {
 	public const MAX_DEPTH = 20;
 
 	/**
-	 * @param DeckGatewayInterface $gateway Fresh READ boundary for every expanded node and edge target.
+	 * Receive only the node-read boundary required by the bounded traversal.
+	 *
+	 * @param DependencyNodeSource $gateway Fresh READ boundary for every expanded node and edge target.
 	 * @param int $maxNodes Maximum distinct readable nodes, including the root.
 	 * @param int $maxEdges Maximum distinct readable directed edges.
 	 * @param int $maxDepth Maximum shortest-path distance from the root, with root depth zero.
 	 */
-	public function __construct(private DeckGatewayInterface $gateway, private int $maxNodes = self::MAX_NODES,
+	public function __construct(private DependencyNodeSource $gateway, private int $maxNodes = self::MAX_NODES,
 		private int $maxEdges = self::MAX_EDGES, private int $maxDepth = self::MAX_DEPTH) {
 	}
 

@@ -20,7 +20,7 @@ use OCP\Share\IShare;
  * installed and never learn which Deck class answered. Every method performs the ACL check the
  * Deck service does internally, plus the explicit checks noted in the sprint 03 contract.
  */
-interface DeckGatewayInterface {
+interface DeckGatewayInterface extends DependencyNodeSource {
 	/**
 	 * Boards shared with the user, archived ones excluded.
 	 *
@@ -29,16 +29,6 @@ interface DeckGatewayInterface {
 	 * @throws \Throwable Any Deck failure; the caller maps it with {@see DeckErrors}.
 	 */
 	public function listBoards(string $userId): array;
-
-	/**
-	 * Reads one native outgoing adjacency after fresh source and target READ checks using the common boundary.
-	 * @param string $userId Authenticated caller.
-	 * @param int $cardId Source card, including archived cards still readable in Deck.
-	 * @param array|null $view Parent listings shared only within one public graph/state operation.
-	 * @return array{card: Card, boardId: int, targets: list<array{card: Card, boardId: int}>} Only readable targets, ordered by ID.
-	 * @throws \Throwable For an unreadable source or uncertain lookup; never returns a partial accessible adjacency.
-	 */
-	public function dependencyNode(string $userId, int $cardId, ?array &$view = null): array;
 
 	/**
 	 * Fresh editable origin, readable active target and the bounded readable cycle-check graph.

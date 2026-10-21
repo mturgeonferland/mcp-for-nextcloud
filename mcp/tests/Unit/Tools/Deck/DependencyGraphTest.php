@@ -11,6 +11,7 @@ use OCA\Deck\Db\Card;
 use OCA\Mcp\Tools\Deck\DeckGatewayInterface;
 use OCA\Mcp\Tools\Deck\DeckRefusalException;
 use OCA\Mcp\Tools\Deck\DependencyGraph;
+use OCA\Mcp\Tools\Deck\DependencyNodeSource;
 use OCA\Mcp\Tools\Deck\Handler\ReadCardDependenciesHandler;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -21,8 +22,16 @@ require_once __DIR__ . '/Stubs/deck_stubs.php';
 final class DependencyGraphTest extends TestCase {
 	use DeckTestHelpers;
 
-	private function gateway(array $adjacency): DeckGatewayInterface {
-		$gateway = $this->createMock(DeckGatewayInterface::class);
+	/**
+	 * Build only the graph's narrow mock, or the full facade contract when constructing a handler.
+	 *
+	 * @template T of DependencyNodeSource
+	 * @param array<int, list<int>> $adjacency Readable native graph used by the fixture.
+	 * @param class-string<T> $interface Contract required by the test's constructor.
+	 * @return T&\PHPUnit\Framework\MockObject\MockObject Mock with the same node responses and expectations.
+	 */
+	private function gateway(array $adjacency, string $interface = DependencyNodeSource::class): DependencyNodeSource {
+		$gateway = $this->createMock($interface);
 		$gateway->method('dependencyNode')->willReturnCallback(static function (string $uid, int $id) use ($adjacency): array {
 			if (!array_key_exists($id, $adjacency)) {
 				throw new \RuntimeException('read failed');
@@ -69,7 +78,7 @@ final class DependencyGraphTest extends TestCase {
 	}
 
 	public function testFailedExpansionDoesNotReturnPartialData(): void {
-		$handler = new ReadCardDependenciesHandler($this->gateway([7 => [8]]),
+		$handler = new ReadCardDependenciesHandler($this->gateway([7 => [8]], DeckGatewayInterface::class),
 			$this->createMock(LoggerInterface::class), $this->cardFormatter());
 		$result = $handler->handle(['cardId' => 7], 'alice');
 		self::assertTrue($result['isError']);
@@ -77,7 +86,7 @@ final class DependencyGraphTest extends TestCase {
 	}
 
 	public function testMinimalPublicGraphHasNoNativeCountersRelationsOrHiddenTotal(): void {
-		$handler = new ReadCardDependenciesHandler($this->gateway([7 => [8], 8 => []]),
+		$handler = new ReadCardDependenciesHandler($this->gateway([7 => [8], 8 => []], DeckGatewayInterface::class),
 			$this->createMock(LoggerInterface::class), $this->cardFormatter());
 		$data = $this->payload($handler->handle(['cardId' => 7], 'alice'));
 		self::assertSame(['id', 'boardId', 'title', 'url'], array_keys($data['nodes'][0]));

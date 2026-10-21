@@ -46,6 +46,7 @@ final class DeckReferenceBoundaryTest extends TestCase {
         $this->services[StackMapper::class]->method('findAll')->willReturn([new Stack(['id' => 30, 'boardId' => 20])]);
         $this->services[StackMapper::class]->method('findBoardId')->willReturn(20);
         $this->services[CardMapper::class]->method('findBoardId')->willReturn(20);
+        $this->services[CardMapper::class]->method('findDependenciesForCards')->willReturnCallback(fn ($ids) => [7 => $this->source->getDependentCards()]);
         $this->services[CardMapper::class]->method('findAll')->willReturn([$this->source]);
         $this->services[CardMapper::class]->method('findAllForStacks')->willReturn([10 => [$this->source]]);
         $this->services[AssignmentMapper::class]->method('findIn')->willReturn([]);
@@ -206,11 +207,20 @@ final class DeckReferenceBoundaryTest extends TestCase {
         $this->gateway->dependencyNode('reader', 7);
     }
 
-    public function testHiddenNativeIdsDoNotConsumeGraphNodeEdgeOrDepthLimits(): void {
+    public static function hiddenFailures(): iterable {
+        yield 'denied' => [false];
+        yield 'missing' => [true];
+    }
+
+    #[DataProvider('hiddenFailures')]
+    public function testHiddenNativeIdsDoNotConsumeGraphNodeEdgeOrDepthLimits(bool $missing): void {
         $this->source->setDependentCards(range(200, 400));
         $permissions = $this->createMock(PermissionService::class);
-        $permissions->method('checkPermission')->willReturnCallback(static function ($mapper, $id): bool {
-            if ($id !== 7) { throw new NoPermissionException('hidden'); }
+        $permissions->method('checkPermission')->willReturnCallback(static function ($mapper, $id) use ($missing): bool {
+            if ($id !== 7) {
+                if ($missing) { throw new \OCP\AppFramework\Db\DoesNotExistException('missing'); }
+                throw new NoPermissionException('hidden');
+            }
             return true;
         });
         $this->services[PermissionService::class] = $permissions;

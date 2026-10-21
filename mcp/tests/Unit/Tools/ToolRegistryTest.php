@@ -88,6 +88,11 @@ final class ToolRegistryTest extends TestCase {
 
     /** Every registered write gets the same readable envelope, regardless of module preview support. */
     public function testEveryRegisteredWriteReturnsMarkdownAndStructuredConfirmation(): void {
+        $this->assertEveryWriteEnvelope(false);
+        $this->assertEveryWriteEnvelope(true);
+    }
+
+    private function assertEveryWriteEnvelope(bool $dependencies): void {
         foreach (GrantPolicy::CATALOG as $module => $operations) {
             foreach ($operations as $operation) { $this->policy->setGrant('alice', $module, $operation, true); }
         }
@@ -96,12 +101,11 @@ final class ToolRegistryTest extends TestCase {
         $users = $this->createMock(IUserManager::class);
         $users->method('get')->willReturn($this->createMock(IUser::class));
         foreach (\OCA\Mcp\AppInfo\Application::MODULES as $class) {
-            // Writing definitions need no resource services. Deck's conditional read catalogue additionally
-            // needs an availability probe; this envelope contract intentionally leaves that optional API off.
+            // Exercise both the unavailable catalogue and the native dependency tools without resource services.
             $instance = (new \ReflectionClass($class))->newInstanceWithoutConstructor();
             if ($instance instanceof \OCA\Mcp\Tools\Deck\DeckToolModule) {
                 (new \ReflectionProperty($instance, 'capabilities'))->setValue($instance,
-                    new \OCA\Mcp\Tools\Deck\DeckCapabilities($apps, 32));
+                    new \OCA\Mcp\Tools\Deck\DeckCapabilities($this->nativeDeckApps(), $dependencies ? 35 : 32, static fn (): bool => true));
             }
             $definitions = $instance->definitions();
             $module = new class($definitions) implements ToolModule {
@@ -549,4 +553,11 @@ final class ToolRegistryTest extends TestCase {
             $this->assertSame('Unknown tool', $e->getMessage());
         }
     }
+    private function nativeDeckApps(): \OCP\App\IAppManager {
+        $apps = $this->createMock(\OCP\App\IAppManager::class);
+        $apps->method('getAppVersion')->willReturn('1.19.0');
+        $apps->method('isEnabledForAnyone')->willReturn(true);
+        return $apps;
+    }
+
 }

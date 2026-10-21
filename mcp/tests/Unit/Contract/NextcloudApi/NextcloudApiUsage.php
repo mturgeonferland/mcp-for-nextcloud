@@ -285,6 +285,21 @@ final class NextcloudApiUsage {
         // Deck 1.18 (Nextcloud 34) gave cards a start date and a colour, and CardService::update() clears both when they
         // are left out. Up to 1.17 the update ends at `done`, so there is nothing to send back.
         // Dependencies are native only since Deck 1.18. The boundary returns the original Card on older entities.
+        'OCA\\Deck\\Db\\CardMapper::findDependenciesForCards' => [
+            'missing' => ['31', '32', '33'],
+            'fallback' => 'OCA\\Deck\\Db\\Card::getId',
+            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+        ],
+        'OCA\\Deck\\Service\\CardService::assignDependentCard' => [
+            'missing' => ['31', '32', '33'],
+            'fallback' => 'OCA\\Deck\\Db\\Card::getId',
+            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+        ],
+        'OCA\\Deck\\Service\\CardService::removeDependentCard' => [
+            'missing' => ['31', '32', '33'],
+            'fallback' => 'OCA\\Deck\\Db\\Card::getId',
+            'by' => \OCA\Mcp\Tools\Deck\DeckServiceGateway::class,
+        ],
         'OCA\\Deck\\Db\\Card::getDependentCards' => [
             'missing' => ['31', '32', '33'],
             'fallback' => 'OCA\\Deck\\Db\\Card::getId',

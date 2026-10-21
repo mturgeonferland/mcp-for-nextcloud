@@ -236,6 +236,34 @@ switch ($action) {
         $cards->assignDependentCard($in['b'], $in['a']);
         $out = ['cycle' => true];
         break;
+    case 'dependency-native-link':
+        $out = attempt(fn () => ($in['remove'] ?? false)
+            ? $cards->removeDependentCard($in['origin'], $in['target'])
+            : $cards->assignDependentCard($in['origin'], $in['target']));
+        break;
+    case 'dependency-ui-state':
+        $out = ['ids' => dependentIds($cards->find($in['a']))];
+        break;
+    case 'dependency-extra':
+        $out = ['c' => $cards->create('Third readable', $in['stack'], 'plain', 2, $uid)->getId()];
+        break;
+    case 'mcp-dependency':
+        $module = new OCA\Mcp\Tools\Deck\DeckToolModule(OC::$server, $apps, Server::get(Psr\Log\LoggerInterface::class),
+            Server::get(OCP\IURLGenerator::class), Server::get(OCP\AppFramework\Utility\ITimeFactory::class),
+            Server::get(OCP\IUserManager::class), Server::get(OCP\IConfig::class), Server::get(OCP\ISession::class));
+        $policy = Server::get(OCA\Mcp\Service\GrantPolicy::class);
+        $policy->setGrant($uid, 'deck', 'edit', $in['grant'] ?? true);
+        $registry = new OCA\Mcp\Tools\ToolRegistry([$module], $policy, $apps, Server::get(OCP\IUserManager::class),
+            Server::get(Psr\Log\LoggerInterface::class));
+        $out = ['tools' => array_column($registry->list($uid), 'name')];
+        $tool = ($in['remove'] ?? false) ? 'deck_remove_card_dependency' : 'deck_add_card_dependency';
+        try { $out['result'] = $registry->call($tool, $in['arguments'], $uid); }
+        catch (InvalidArgumentException) { $out['refused'] = true; }
+        if ((int)getenv('MCP_IT_NC') < 34) {
+            try { $module->call($tool, $in['arguments'], $uid); }
+            catch (InvalidArgumentException) { $out['directRefused'] = true; }
+        }
+        break;
     case 'dependency-read':
         $module = new OCA\Mcp\Tools\Deck\DeckToolModule(OC::$server, $apps, Server::get(Psr\Log\LoggerInterface::class),
             Server::get(OCP\IURLGenerator::class), Server::get(OCP\AppFramework\Utility\ITimeFactory::class),

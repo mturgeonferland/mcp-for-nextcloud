@@ -32,11 +32,37 @@ interface DeckGatewayInterface {
 	 * Reads one native outgoing adjacency after fresh source and target READ checks using the common boundary.
 	 * @param string $userId Authenticated caller.
 	 * @param int $cardId Source card, including archived cards still readable in Deck.
+	 * @param array|null $view Parent listings shared only within one public graph/state operation.
 	 * @return array{card: Card, boardId: int, targets: list<array{card: Card, boardId: int}>} Only readable targets, ordered by ID.
 	 * @throws \Throwable For an unreadable source or uncertain lookup; never returns a partial accessible adjacency.
 	 */
-	public function dependencyNode(string $userId, int $cardId): array;
+	public function dependencyNode(string $userId, int $cardId, ?array &$view = null): array;
 
+	/**
+	 * Fresh editable origin, readable active target and the bounded readable cycle-check graph.
+	 * @param string $userId Authenticated caller.
+	 * @param int $originId Origin whose outgoing relation changes.
+	 * @param int $targetId Target requiring READ even for removal.
+	 * @param bool $assign True for addition.
+	 * @param bool $checkCycle False only for read-back after an attempted write.
+	 * @return array<string, mixed> Only readable state; never hidden IDs, counts or timestamps.
+	 * @throws \Throwable On denial, uncertainty, self-relation or detectable cycle.
+	 */
+	public function dependencyChangeState(string $userId, int $originId, int $targetId, bool $assign,
+		bool $checkCycle = true): array;
+
+	/**
+	 * Revalidates the complete readable snapshot immediately before one native association write.
+	 * @param string $userId Authenticated caller.
+	 * @param int $originId Editable origin.
+	 * @param int $targetId Readable target.
+	 * @param bool $assign Add when true; otherwise remove only this relation.
+	 * @param array<string, mixed> $expected Canonical snapshot shown in the plan.
+	 * @return void
+	 * @throws DeckConflictException Before writing when the readable snapshot changed.
+	 * @throws \Throwable On refusal or native failure; persistence requires read-back.
+	 */
+	public function changeDependency(string $userId, int $originId, int $targetId, bool $assign, array $expected): void;
 
 	/**
 	 * Fresh editable card, active parents and board-local labels. Inherited foreign links remain internal.

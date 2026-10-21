@@ -26,18 +26,20 @@ final class DependencyGraph {
 	/**
 	 * @param string $userId Authenticated caller.
 	 * @param int $rootId Readable source card.
+	 * @param array|null $view Parent listings scoped to this traversal or enclosing state operation.
 	 * @return array{rootId: int, nodes: list<array>, edges: list<array>, complete: bool, limits: array}
 	 * @throws \Throwable When a fresh node read fails; no partial graph is returned.
 	 * @throws DeckRefusalException When the readable subgraph exceeds any bound.
 	 */
-	public function read(string $userId, int $rootId): array {
+	public function read(string $userId, int $rootId, ?array &$view = null): array {
+		$view ??= [];
 		$queue = [[$rootId, 0]];
 		$visited = [$rootId => true];
 		$nodes = [];
 		$edges = [];
 		for ($cursor = 0; $cursor < count($queue); $cursor++) {
 			[$id, $depth] = $queue[$cursor];
-			$node = $this->gateway->dependencyNode($userId, $id);
+			$node = $this->gateway->dependencyNode($userId, $id, $view);
 			$nodes[$id] = ['card' => $node['card'], 'boardId' => $node['boardId']];
 			foreach ($node['targets'] as $target) {
 				$targetId = (int)$target['card']->getId();

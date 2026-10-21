@@ -28,6 +28,7 @@ final class DeckPlanRenderer {
 		try {
 			$zone = $this->resolveZone($plan);
 			return match ($tool) {
+				'deck_add_card_dependency', 'deck_remove_card_dependency' => $this->renderDependency($plan),
 				'deck_edit_card_labels' => $this->renderLabels($plan),
 				'deck_create_card' => $this->renderCreate($plan, $zone),
 				'deck_edit_card' => $this->renderEdit($plan, $zone),
@@ -42,6 +43,19 @@ final class DeckPlanRenderer {
 		} catch (\Throwable) {
 			return null;
 		}
+	}
+
+	/**
+	 * @param array<string, mixed> $plan Requested readable edge and before/after presence.
+	 * @return string Escaped direction and state, with the visibility/concurrency limitation.
+	 */
+	private function renderDependency(array $plan): string {
+		$state = static fn (bool $present): string => $present ? Translator::t('present') : Translator::t('absent');
+		return Translator::t('Deck dependency: %s → %s.', [PlanText::em($plan['origin']['title']), PlanText::em($plan['target']['title'])])
+			. "\n\n" . Translator::t('Before: %s', [$state($plan['before'])])
+			. "\n\n" . Translator::t('After: %s', [$state($plan['after'])])
+			. "\n\n" . DeckMessages::dependencyWriteLimitations()
+			. ($this->sharedLine($plan['board']) === [] ? '' : "\n\n" . implode("\n", $this->sharedLine($plan['board'])));
 	}
 
 	/**

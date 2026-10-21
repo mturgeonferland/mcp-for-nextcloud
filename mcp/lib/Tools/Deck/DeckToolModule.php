@@ -11,6 +11,7 @@ use InvalidArgumentException;
 use OCA\Mcp\Service\Compat\AppEnablement;
 use OCA\Mcp\Service\UserTimezone;
 use OCA\Mcp\Tools\Deck\Handler\AbstractHandler;
+use OCA\Mcp\Tools\Deck\Handler\ChangeCardDependencyHandler;
 use OCA\Mcp\Tools\Deck\Handler\CreateBoardHandler;
 use OCA\Mcp\Tools\Deck\Handler\CreateCardHandler;
 use OCA\Mcp\Tools\Deck\Handler\CreateStackHandler;
@@ -402,6 +403,18 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				'inputSchema' => $this->schema(['cardId' => $this->integer(DeckMessages::PARAM_CARD_ID)], ['cardId']),
 				'module' => self::MODULE, 'operation' => 'read', 'app' => self::DECK_APP,
 			];
+			foreach ([ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE] as $tool) {
+				$definitions[] = ['name' => $tool,
+					'description' => ($tool === ChangeCardDependencyHandler::ADD
+						? DeckMessages::TOOL_ADD_DEPENDENCY_DESCRIPTION : DeckMessages::TOOL_REMOVE_DEPENDENCY_DESCRIPTION)
+						. DeckMessages::CONFIRM_SHARED_DESCRIPTION,
+					'inputSchema' => $this->schema([
+						'cardId' => $this->integer(DeckMessages::PARAM_CARD_ID),
+						'targetId' => $this->integer(DeckMessages::PARAM_DEPENDENCY_TARGET),
+						'confirm_shared' => $this->confirmShared(), PlanState::ARGUMENT => PlanState::property(),
+					], ['cardId', 'targetId']),
+					'module' => self::MODULE, 'operation' => 'edit', 'app' => self::DECK_APP];
+			}
 		}
 		return $definitions;
 	}
@@ -416,7 +429,8 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 * @throws InvalidArgumentException For an unknown tool or when the Deck app is unavailable, mapped to -32602.
 	 */
 	public function call(string $name, array $arguments, string $userId): array {
-		if ($name === ReadCardDependenciesHandler::TOOL && !$this->dependencyCapabilities()->dependencies()) {
+		if (in_array($name, [ReadCardDependenciesHandler::TOOL, ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE], true)
+			&& !$this->dependencyCapabilities()->dependencies()) {
 			throw new InvalidArgumentException(DeckMessages::dependenciesUnavailable());
 		}
 		$handler = $this->handlerFor($name, $userId);
@@ -450,8 +464,13 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 * @throws \OCA\Mcp\Tools\ToolFailure When the Deck refuses the same read the write would do.
 	 */
 	public function preview(string $name, array $arguments, string $userId): array {
+		if (in_array($name, [ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE], true)
+			&& !$this->dependencyCapabilities()->dependencies()) {
+			throw new InvalidArgumentException(DeckMessages::dependenciesUnavailable());
+		}
 		try {
 			$plan = match ($name) {
+				ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE => $this->dependencyHandler($name, $userId)->preview($arguments, $userId),
 				EditCardLabelsHandler::TOOL => $this->labelHandler($userId)->preview($arguments, $userId),
 				CreateCardHandler::TOOL => $this->planCreate($arguments, $userId),
 				EditCardHandler::TOOL => $this->planEdit($arguments, $userId),
@@ -862,6 +881,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		$formatter = $this->formatter($userId);
 
 		return match ($name) {
+			ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE => $this->dependencyHandler($name, $userId),
 			EditCardLabelsHandler::TOOL => $this->labelHandler($userId),
 			ListLabelsHandler::TOOL => new ListLabelsHandler($this->gateway(), $this->logger),
 			ListBoardsHandler::TOOL => new ListBoardsHandler($this->gateway(), $this->logger, $formatter),
@@ -880,6 +900,17 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 			DeleteBoardHandler::TOOL => new DeleteBoardHandler($this->gateway(), $this->logger),
 			default => null,
 		};
+	}
+
+	/**
+	 * @param string $name Native relation tool.
+	 * @param string $userId Authenticated caller.
+	 * @return ChangeCardDependencyHandler Handler bound to one direction and lazy plan fingerprint.
+	 */
+	private function dependencyHandler(string $name, string $userId): ChangeCardDependencyHandler {
+		return new ChangeCardDependencyHandler($this->gateway(), $this->logger, $this->formatter($userId),
+			fn (): PlanState => new PlanState($this->config ?? $this->container->get(IConfig::class)),
+			$name === ChangeCardDependencyHandler::ADD);
 	}
 
 	/**

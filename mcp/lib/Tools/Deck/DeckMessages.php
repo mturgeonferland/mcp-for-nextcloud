@@ -52,6 +52,9 @@ final class DeckMessages {
 	public const PARAM_LABEL_ADD = 'Label IDs to assign incrementally, from the card board (maximum 100).';
 	public const PARAM_LABEL_REMOVE = 'Label IDs to unassign incrementally, from the card board (maximum 100).';
 
+	public const PARAM_DEPENDENCY_TARGET = 'Readable target card ID. For native assignDependentCard(A,B), A is cardId and B is targetId.';
+	public const TOOL_ADD_DEPENDENCY_DESCRIPTION = 'Adds one native outgoing Deck dependency cardId -> targetId on NC34/35. Requires deck.edit, origin EDIT and target READ. Refuses self-relations and cycles detectable in the bounded readable graph (100 nodes, 500 edges, depth 20); never promises a global DAG. Cycles through unreadable cards and the final check-to-write race cannot be excluded. Other links are preserved; duplicate is a no-op. Preview first, then confirm:true with the returned plan_state.';
+	public const TOOL_REMOVE_DEPENDENCY_DESCRIPTION = 'Removes only cardId -> targetId through the native Deck API on NC34/35. Requires deck.edit, origin EDIT and target READ even for removal. Hidden and nonexistent targets have the same refusal; no hidden count or handle. Missing relation is a no-op. Preview first, then confirm:true with the returned plan_state.';
 	public const TOOL_READ_DEPENDENCIES_DESCRIPTION = 'Reads the complete outgoing native dependency subgraph reachable through readable cards. For native assignDependentCard(A,B), B appears in A.dependentCards: originId=A and targetId=B, without automatic task blocking. Nodes sorted by ID; edges sorted by originId/targetId. No pagination: at most 100 readable nodes (including root), 500 readable edges and shortest-path depth 20; refuses rather than returning an incomplete graph. Never reports hidden IDs, counts, handles or a hidden-limit indicator. Cycles through unreadable cards cannot be detected. Available only on compatible NC34/35 native APIs; exact releases proved: Deck1.18.5/1.19.0.';
 
 	/* Parameter descriptions. */
@@ -452,4 +455,34 @@ final class DeckMessages {
 	public static function planDeleteConsequence(): string {
 		return Translator::t('Deck deletes the card the way the web interface does: it leaves the lists, and only the board owner or an administrator can bring it back from the Deck web interface. No tool of this app undoes it.');
 	}
+	/** @return string Localized dependency change message. */
+	public static function dependencyCycle(): string {
+		return Translator::t('Self-relations and cycles detectable through readable cards are refused.');
+	}
+
+	/** @return string Localized dependency change message. */
+	public static function dependencyInactive(): string {
+		return Translator::t('Dependency changes require active cards and boards.');
+	}
+
+	/** @return string Localized dependency change message. */
+	public static function dependencyPlanChanged(): string {
+		return Translator::t('The readable dependency state changed. Review the new plan before confirming.');
+	}
+
+	/** @return string Localized dependency change message. */
+	public static function dependencyUnconfirmed(): string {
+		return Translator::t('The dependency result could not be confirmed. Check the Deck interface; do not repeat the write automatically.');
+	}
+
+	/** @return string Localized dependency change message. */
+	public static function dependencyStateObserved(): string {
+		return Translator::t('The requested relation state was observed after a failure. Another actor may have produced it; this does not prove which write changed it.');
+	}
+
+	/** @return string Localized dependency change message. */
+	public static function dependencyWriteLimitations(): string {
+		return Translator::t('Only the requested relation changes. Cycles through unreadable cards cannot be detected. A concurrent change between the final check and the native write can still create a cycle.');
+	}
+
 }

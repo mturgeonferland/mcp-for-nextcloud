@@ -871,20 +871,76 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		return array_values($boardMapper->findAllByOwner($userId) ?: []);
 	}
 
-	/** {@inheritDoc} CardService::find enriches the native outgoing IDs on Deck v1.18.5/v1.19.0. */
-	public function dependencyNode(string $userId, int $cardId): array {
-		if (!property_exists(Card::class, 'dependentCards') || !method_exists(CardService::class, 'assignDependentCard')) {
+	/** {@inheritDoc} Native adjacency is loaded only after READ, without attachment enrichment. */
+	public function dependencyNode(string $userId, int $cardId, ?array &$view = null): array {
+		if (!property_exists(Card::class, 'dependentCards') || !method_exists(CardMapper::class, 'findDependenciesForCards')) {
 			throw new DeckRefusalException(DeckMessages::dependenciesUnavailable());
 		}
-		$view = [];
+		$view ??= [];
 		$source = $this->referenceTarget($userId, $cardId, $view);
 		if ($source === null) {
 			throw new NoPermissionException('Permission denied');
 		}
 		$targets = [];
-		$card = $this->filterCardReferences($userId, $this->service(CardService::class)->find($cardId), $view, true, $targets);
+		$card = clone $source['card'];
+		$adjacency = $this->service(CardMapper::class)->findDependenciesForCards([$cardId]);
+		$card->setDependentCards($adjacency[$cardId] ?? []);
+		$card = $this->filterCardReferences($userId, $card, $view, true, $targets);
 		usort($targets, static fn (array $a, array $b): int => $a['card']->getId() <=> $b['card']->getId());
 		return ['card' => $card, 'boardId' => $source['boardId'], 'targets' => $targets];
+	}
+
+	/** {@inheritDoc} Hidden associations and lastModified never enter a plan fingerprint. */
+	public function dependencyChangeState(string $userId, int $originId, int $targetId, bool $assign,
+		bool $checkCycle = true): array {
+		if ($originId === $targetId) {
+			throw new DeckRefusalException(DeckMessages::dependencyCycle());
+		}
+		$view = [];
+		$origin = $this->dependencyNode($userId, $originId, $view);
+		$this->bindUser($userId);
+		$this->service(PermissionService::class)->checkPermission($this->service(CardMapper::class), $originId, Acl::PERMISSION_EDIT);
+		$target = $this->referenceTarget($userId, $targetId, $view);
+		if ($target === null) {
+			throw new NoPermissionException('Permission denied');
+		}
+		foreach ([$origin, $target] as $node) {
+			if ($node['card']->getArchived() || $view['boards'][$node['boardId']]->getArchived()) {
+				throw new DeckRefusalException(DeckMessages::dependencyInactive());
+			}
+		}
+		$present = in_array($targetId, array_map(
+			static fn (array $node): int => (int)$node['card']->getId(), $origin['targets']), true);
+		$graph = null;
+		if ($assign && !$present && $checkCycle) {
+			$graph = (new DependencyGraph($this))->read($userId, $targetId, $view);
+			foreach ($graph['nodes'] as $node) {
+				if ((int)$node['card']->getId() === $originId) {
+					throw new DeckRefusalException(DeckMessages::dependencyCycle());
+				}
+			}
+		}
+		$board = $view['boards'][$origin['boardId']];
+		$owner = (string)$board->getOwner();
+		return ['origin' => $origin, 'target' => $target, 'present' => $present, 'graph' => $graph,
+			'board' => ['owner' => $owner, 'ownerDisplayName' => $this->displayName($owner), 'name' => (string)$board->getTitle()]];
+	}
+
+	/** {@inheritDoc} Native APIs still leave a check-to-write race, documented in every plan. */
+	public function changeDependency(string $userId, int $originId, int $targetId, bool $assign, array $expected): void {
+		$state = $this->dependencyChangeState($userId, $originId, $targetId, $assign);
+		if (DependencyChange::snapshot($state) !== $expected) {
+			throw new DeckConflictException(DeckMessages::dependencyPlanChanged());
+		}
+		if ($state['present'] === $assign) {
+			return;
+		}
+		$cards = $this->service(CardService::class);
+		if ($assign) {
+			$cards->assignDependentCard($originId, $targetId);
+		} else {
+			$cards->removeDependentCard($originId, $targetId);
+		}
 	}
 
 	/**
@@ -947,11 +1003,14 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		if ($target->getDeletedAt() !== 0) {
 			return null;
 		}
-		$view['boards'] ??= array_fill_keys(array_map(
-			static fn (Board $board): int => (int)$board->getId(),
-			array_filter($boards->findAll(self::FRESH_BOARD_SINCE, false, true),
-				static fn (Board $board): bool => $board->getDeletedAt() === 0),
-		), true);
+		if (!isset($view['boards'])) {
+			$view['boards'] = [];
+			foreach ($boards->findAll(self::FRESH_BOARD_SINCE, false, true) as $board) {
+				if ($board->getDeletedAt() === 0) {
+					$view['boards'][(int)$board->getId()] = $board;
+				}
+			}
+		}
 		$boardId = $mapper->findBoardId($id);
 		if (!isset($view['boards'][$boardId])) {
 			return null;

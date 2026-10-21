@@ -273,6 +273,10 @@ class StackMapper implements IPermissionMapper {
 
 /** Card mapper double; signatures mirror Deck `v1.17.5` `lib/Db/CardMapper.php`. */
 class CardMapper implements IPermissionMapper {
+	public function findDependenciesForCards(array $cardIds): array {
+		throw new \RuntimeException('stub');
+	}
+
 	/**
 	 * @param string $userId User to check ownership for.
 	 * @param int $id Card id.

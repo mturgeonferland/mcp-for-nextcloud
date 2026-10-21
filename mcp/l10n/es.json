@@ -1,4 +1,13 @@
 { "translations": {
+    "List Deck card files" : "Listar archivos de la tarjeta de Deck",
+    "Unlink Deck card file" : "Desvincular archivo de la tarjeta de Deck",
+    "Unlink %s from Deck card %s." : "Desvincular %s de la tarjeta de Deck %s.",
+    "Association created by: %s" : "Vínculo creado por: %s",
+    "File association changes require an active card and board." : "Los cambios de vínculos de archivos requieren una tarjeta y un tablero activos.",
+    "The file association state changed. Request a new plan before confirming." : "El estado del vínculo del archivo cambió. Solicite un nuevo plan antes de confirmar.",
+    "The file association result could not be confirmed. Check the Deck interface; do not repeat the unlink automatically." : "No se pudo confirmar el resultado del vínculo del archivo. Compruebe la interfaz de Deck; no repita la desvinculación automáticamente.",
+    "The association was absent after a native failure. Another actor may have removed it; this does not prove which operation removed it." : "El vínculo estaba ausente tras un fallo nativo. Otro usuario puede haberlo eliminado; esto no demuestra qué operación lo eliminó.",
+    "The original file is preserved. Unlinking revokes this association for all current and future card members, including when another member created it. Independent shares may still provide access. This removes only a native file share, never a legacy upload or folder." : "Se conserva el archivo original. Desvincular revoca este vínculo para todos los miembros actuales y futuros de la tarjeta, incluso si lo creó otro miembro. Los recursos compartidos independientes pueden seguir dando acceso. Solo se elimina un recurso compartido nativo de archivo, nunca una carga heredada ni una carpeta.",
     "Add Deck card dependency" : "Añadir dependencia entre tarjetas de Deck",
     "Remove Deck card dependency" : "Eliminar dependencia entre tarjetas de Deck",
     "present" : "presente",

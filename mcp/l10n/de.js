@@ -1,6 +1,15 @@
 OC.L10N.register(
     "mcp",
     {
+    "List Deck card files" : "Dateien der Deck-Karte auflisten",
+    "Unlink Deck card file" : "Dateiverknüpfung der Deck-Karte entfernen",
+    "Unlink %s from Deck card %s." : "Verknüpfung von %s mit der Deck-Karte %s entfernen.",
+    "Association created by: %s" : "Verknüpfung erstellt von: %s",
+    "File association changes require an active card and board." : "Änderungen an Dateiverknüpfungen erfordern eine aktive Karte und ein aktives Board.",
+    "The file association state changed. Request a new plan before confirming." : "Der Zustand der Dateiverknüpfung hat sich geändert. Fordern Sie vor der Bestätigung einen neuen Plan an.",
+    "The file association result could not be confirmed. Check the Deck interface; do not repeat the unlink automatically." : "Das Ergebnis der Dateiverknüpfung konnte nicht bestätigt werden. Prüfen Sie die Deck-Oberfläche; wiederholen Sie das Entfernen nicht automatisch.",
+    "The association was absent after a native failure. Another actor may have removed it; this does not prove which operation removed it." : "Die Verknüpfung war nach einem nativen Fehler nicht mehr vorhanden. Ein anderer Akteur kann sie entfernt haben; dies beweist nicht, welcher Vorgang sie entfernt hat.",
+    "The original file is preserved. Unlinking revokes this association for all current and future card members, including when another member created it. Independent shares may still provide access. This removes only a native file share, never a legacy upload or folder." : "Die Originaldatei bleibt erhalten. Das Entfernen widerruft diese Verknüpfung für alle aktuellen und zukünftigen Kartenmitglieder, auch wenn ein anderes Mitglied sie erstellt hat. Unabhängige Freigaben können weiterhin Zugriff gewähren. Es wird nur eine native Dateifreigabe entfernt, niemals ein alter Upload oder ein Ordner.",
     "Add Deck card dependency" : "Deck-Kartenabhängigkeit hinzufügen",
     "Remove Deck card dependency" : "Deck-Kartenabhängigkeit entfernen",
     "present" : "vorhanden",

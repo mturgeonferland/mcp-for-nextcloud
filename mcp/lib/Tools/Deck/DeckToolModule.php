@@ -9,8 +9,12 @@ namespace OCA\Mcp\Tools\Deck;
 
 use InvalidArgumentException;
 use OCA\Mcp\Service\Compat\AppEnablement;
+use OCA\Mcp\Service\GrantPolicy;
+use OCA\Mcp\Service\Policy\PolicyUnavailable;
+use OCA\Mcp\Service\Scope\FilesAccessGuard;
 use OCA\Mcp\Service\UserTimezone;
 use OCA\Mcp\Tools\Deck\Handler\AbstractHandler;
+use OCA\Mcp\Tools\Deck\Handler\CardFileHandler;
 use OCA\Mcp\Tools\Deck\Handler\ChangeCardDependencyHandler;
 use OCA\Mcp\Tools\Deck\Handler\CreateBoardHandler;
 use OCA\Mcp\Tools\Deck\Handler\CreateCardHandler;
@@ -36,6 +40,7 @@ use OCA\Mcp\Tools\ToolGuideNotes;
 use OCA\Mcp\Tools\ToolModule;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\App\IAppManager;
+use OCP\Files\IRootFolder;
 use OCP\IConfig;
 use OCP\IURLGenerator;
 use OCP\IUserManager;
@@ -68,6 +73,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	private const DEFAULT_LIMIT = 50;
 
 	private ?DeckGatewayInterface $gateway = null;
+	private ?CardFiles $cardFiles = null;
 
 	/**
 	 * @param ContainerInterface $container Nextcloud server container, resolves the Deck services lazily.
@@ -161,6 +167,25 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				'module' => self::MODULE,
 				'operation' => 'read',
 				'app' => self::DECK_APP,
+			],
+			[
+				'name' => CardFileHandler::READ, 'description' => DeckMessages::TOOL_CARD_FILES_DESCRIPTION,
+				'inputSchema' => $this->schema(['cardId' => $this->integer(DeckMessages::PARAM_CARD_ID)], ['cardId']),
+				'module' => self::MODULE, 'operation' => 'read', 'app' => self::DECK_APP,
+			],
+			[
+				'name' => CardFileHandler::UNLINK, 'description' => DeckMessages::TOOL_UNLINK_FILE_DESCRIPTION . DeckMessages::CONFIRM_SHARED_DESCRIPTION,
+				'inputSchema' => $this->schema([
+					'cardId' => $this->integer(DeckMessages::PARAM_CARD_ID),
+					'attachmentId' => $this->integer(DeckMessages::PARAM_ATTACHMENT_ID),
+					'file_state' => $this->schema([
+						'fileId' => $this->integer('Original Files node ID from the plan receipt.'),
+						'createdBy' => $this->string('Native share initiator from the plan receipt.', 1, 255),
+						'createdAt' => $this->integer('Native share creation timestamp from the plan receipt.', 0),
+					], ['fileId', 'createdBy', 'createdAt']),
+					'confirm_shared' => $this->confirmShared(), PlanState::ARGUMENT => PlanState::property(),
+				], ['cardId', 'attachmentId']),
+				'module' => self::MODULE, 'operation' => 'edit', 'app' => self::DECK_APP,
 			],
 			[
 				'name' => EditCardLabelsHandler::TOOL,
@@ -470,6 +495,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		}
 		try {
 			$plan = match ($name) {
+				CardFileHandler::UNLINK => $this->fileHandler($name, $userId)->preview($arguments, $userId),
 				ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE => $this->dependencyHandler($name, $userId)->preview($arguments, $userId),
 				EditCardLabelsHandler::TOOL => $this->labelHandler($userId)->preview($arguments, $userId),
 				CreateCardHandler::TOOL => $this->planCreate($arguments, $userId),
@@ -485,6 +511,8 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 			$plan['timezone'] = $this->zones()?->forUser($userId)->getName();
 
 			return $plan;
+		} catch (PolicyUnavailable $e) {
+			throw $e;
 		} catch (InvalidArgumentException $e) {
 			throw $e;
 		} catch (\Throwable $e) {
@@ -881,6 +909,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		$formatter = $this->formatter($userId);
 
 		return match ($name) {
+			CardFileHandler::READ, CardFileHandler::UNLINK => $this->fileHandler($name, $userId),
 			ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE => $this->dependencyHandler($name, $userId),
 			EditCardLabelsHandler::TOOL => $this->labelHandler($userId),
 			ListLabelsHandler::TOOL => new ListLabelsHandler($this->gateway(), $this->logger),
@@ -900,6 +929,18 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 			DeleteBoardHandler::TOOL => new DeleteBoardHandler($this->gateway(), $this->logger),
 			default => null,
 		};
+	}
+
+	/**
+	 * @param string $name File read or unlink tool.
+	 * @param string $userId Authenticated caller.
+	 * @return CardFileHandler Handler with Files guards, opened only when the tool actually runs.
+	 */
+	private function fileHandler(string $name, string $userId): CardFileHandler {
+		$files = fn (): CardFiles => $this->cardFiles ??= new CardFiles($this->gateway(), $this->container->get(GrantPolicy::class),
+			$this->container->get(FilesAccessGuard::class), $this->container->get(IRootFolder::class));
+		return new CardFileHandler($this->gateway(), $this->logger, $files, $this->formatter($userId),
+			fn (): PlanState => new PlanState($this->config ?? $this->container->get(IConfig::class)), $name === CardFileHandler::UNLINK);
 	}
 
 	/**

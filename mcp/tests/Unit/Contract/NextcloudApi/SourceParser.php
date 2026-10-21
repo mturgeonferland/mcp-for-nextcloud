@@ -50,7 +50,7 @@ final class SourceParser {
         if ($file === null) {
             return null;
         }
-        $own = $this->parse($file);
+        $own = $this->parse($file, $class);
         $surface = ['kind' => $own['kind'], 'methods' => $own['methods'], 'types' => $own['types'], 'constants' => $own['constants'], 'properties' => $own['properties'], 'fields' => $own['fields'], 'external' => []];
         foreach ($own['parents'] as $parent) {
             $inherited = $this->surface($parent);
@@ -108,9 +108,9 @@ final class SourceParser {
 
     /**
      * @return array{kind:string, parents:list<string>, methods:array<string, list<string>>, types:array<string, list<string>>, constants:list<string>, properties:list<string>, fields:list<string>}
-     *     the members the first class-like declaration of the file declares itself
+     *     the members the requested class-like declaration of the file declares itself
      */
-    private function parse(string $file): array {
+    private function parse(string $file, string $target): array {
         $tokens = array_values(array_filter(
             \PhpToken::tokenize((string)file_get_contents($file)),
             static fn (\PhpToken $token): bool => !$token->isIgnorable(),
@@ -143,6 +143,9 @@ final class SourceParser {
                     $imports[$alias] = $name;
                 } elseif (in_array($token->id, [T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM], true)
                     && !in_array($tokens[$i - 1]->id ?? null, [T_DOUBLE_COLON, T_NEW], true)) {
+                    if (ltrim($namespace . '\\' . $tokens[$i + 1]->text, '\\') !== $target) {
+                        continue; // DeckShareProvider.php also declares a helper interface before the class.
+                    }
                     $result['kind'] = strtolower($token->text);
                     for ($i += 2; $i < $count && $tokens[$i]->text !== '{'; $i++) {
                         if (in_array($tokens[$i]->id, [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {

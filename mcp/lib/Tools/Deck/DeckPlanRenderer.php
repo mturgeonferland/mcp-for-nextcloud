@@ -28,6 +28,7 @@ final class DeckPlanRenderer {
 		try {
 			$zone = $this->resolveZone($plan);
 			return match ($tool) {
+				'deck_unlink_card_file' => $this->renderUnlinkFile($plan),
 				'deck_add_card_dependency', 'deck_remove_card_dependency' => $this->renderDependency($plan),
 				'deck_edit_card_labels' => $this->renderLabels($plan),
 				'deck_create_card' => $this->renderCreate($plan, $zone),
@@ -43,6 +44,17 @@ final class DeckPlanRenderer {
 		} catch (\Throwable) {
 			return null;
 		}
+	}
+
+	/**
+	 * @param array<string, mixed> $plan Visible file and creator, authorized before formatting.
+	 * @return string Escaped file identity, source, creator and global share-revocation warning.
+	 */
+	private function renderUnlinkFile(array $plan): string {
+		return Translator::t('Unlink %s from Deck card %s.', [PlanText::em($plan['file']['name']), PlanText::em($plan['card']['title'])])
+			. "\n\n" . Translator::t('Association created by: %s', [PlanText::inline($plan['createdBy'])])
+			. "\n\n" . DeckMessages::fileUnlinkWarning()
+			. ($this->sharedLine($plan['board']) === [] ? '' : "\n\n" . implode("\n", $this->sharedLine($plan['board'])));
 	}
 
 	/**

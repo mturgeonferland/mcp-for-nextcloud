@@ -7,8 +7,6 @@ declare(strict_types=1);
 
 namespace OCA\Mcp\Tools\Deck;
 
-use OCA\Mcp\L10n\Translator;
-use OCA\Mcp\Tools\ArgumentValidationException;
 use OCA\Deck\Db\Acl;
 use OCA\Deck\Db\Assignment;
 use OCA\Deck\Db\AssignmentMapper;
@@ -22,14 +20,21 @@ use OCA\Deck\Db\StackMapper;
 use OCA\Deck\Model\OptionalNullableValue;
 use OCA\Deck\NoPermissionException;
 use OCA\Deck\Service\AssignmentService;
+use OCA\Deck\Service\AttachmentService;
 use OCA\Deck\Service\BoardService;
 use OCA\Deck\Service\CardService;
 use OCA\Deck\Service\PermissionService;
 use OCA\Deck\Service\StackService;
+use OCA\Deck\Sharing\DeckShareProvider;
+use OCA\Mcp\L10n\Translator;
 use OCA\Mcp\Service\UserTimezone;
+use OCA\Mcp\Tools\ArgumentValidationException;
 use OCP\AppFramework\Utility\ITimeFactory;
+use OCP\Files\File;
 use OCP\ISession;
 use OCP\IUserManager;
+use OCP\Share\Exceptions\ShareNotFound;
+use OCP\Share\IShare;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -869,6 +874,70 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 		$boardMapper = $this->service(BoardMapper::class);
 
 		return array_values($boardMapper->findAllByOwner($userId) ?: []);
+	}
+
+	/** {@inheritDoc} Parent listings are fresh, scoped only to this call. */
+	public function cardFileContext(string $userId, int $cardId, bool $edit): array {
+		$view = [];
+		$source = $this->referenceTarget($userId, $cardId, $view);
+		if ($source === null) {
+			throw new NoPermissionException('Permission denied');
+		}
+		$board = $view['boards'][$source['boardId']];
+		if ($edit) {
+			$this->service(PermissionService::class)->checkPermission($this->service(CardMapper::class), $cardId, Acl::PERMISSION_EDIT);
+			if ($source['card']->getArchived() || $board->getArchived()) {
+				throw new DeckRefusalException(DeckMessages::fileSourceInactive());
+			}
+		}
+		$owner = (string)$board->getOwner();
+		return $source + ['board' => ['owner' => $owner, 'ownerDisplayName' => $this->displayName($owner),
+			'name' => (string)$board->getTitle()]];
+	}
+
+	/** {@inheritDoc} Unlike AttachmentService::findAll, this never loads legacy deck_file attachments. */
+	public function cardFileShares(string $userId, int $cardId): array {
+		$this->cardFileContext($userId, $cardId, false);
+		return array_values($this->service(DeckShareProvider::class)->getSharedWithByType($cardId, IShare::TYPE_DECK, -1, 0));
+	}
+
+	/** {@inheritDoc} An unreadable/missing/wrong-card association has no public metadata. */
+	public function cardFileShare(string $userId, int $cardId, int $attachmentId): ?IShare {
+		$this->cardFileContext($userId, $cardId, false);
+		try {
+			$share = $this->service(DeckShareProvider::class)->getShareById((string)$attachmentId);
+		} catch (ShareNotFound) {
+			return null;
+		}
+		if ($share->getShareType() !== IShare::TYPE_DECK || (string)$share->getSharedWith() !== (string)$cardId
+			|| (int)$share->getId() !== $attachmentId) {
+			throw new NoPermissionException('Permission denied');
+		}
+		return $share;
+	}
+
+	/** {@inheritDoc} Only the boolean for the already authorized ID is returned. */
+	public function cardFileShareExists(string $userId, int $cardId, int $attachmentId, File $node): bool {
+		$this->cardFileContext($userId, $cardId, false);
+		foreach ($this->service(DeckShareProvider::class)->getSharesByPath($node) as $share) {
+			if ((int)$share->getId() === $attachmentId) {
+				if ((string)$share->getSharedWith() !== (string)$cardId || $share->getShareType() !== IShare::TYPE_DECK) {
+					throw new NoPermissionException('Permission denied');
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** {@inheritDoc} The 'file' type is literal; this path cannot dispatch legacy file deletion. */
+	public function unlinkCardFile(string $userId, int $cardId, int $attachmentId, array $expected): void {
+		$this->cardFileContext($userId, $cardId, true);
+		$share = $this->cardFileShare($userId, $cardId, $attachmentId);
+		if ($share === null || CardFiles::identity($share) !== $expected) {
+			throw new DeckConflictException(DeckMessages::filePlanChanged());
+		}
+		$this->service(AttachmentService::class)->delete($cardId, $attachmentId, 'file');
 	}
 
 	/** {@inheritDoc} Native adjacency is loaded only after READ, without attachment enrichment. */

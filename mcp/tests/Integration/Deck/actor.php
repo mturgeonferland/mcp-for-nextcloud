@@ -247,6 +247,77 @@ switch ($action) {
     case 'dependency-extra':
         $out = ['c' => $cards->create('Third readable', $in['stack'], 'plain', 2, $uid)->getId()];
         break;
+    case 'files-prepare':
+        $suffix = bin2hex(random_bytes(5));
+        $ownerFolder = $root->getUserFolder($uid)->newFolder('dk4a-visible-' . $suffix);
+        $visible = $ownerFolder->newFile('visible.txt', 'DK4a original bytes ' . $suffix);
+        $secret = $root->getUserFolder($uid)->newFile('dk4a-secret-' . $suffix . '.txt', 'DK4a excluded bytes');
+        $tag = Server::get(OCP\SystemTag\ISystemTagManager::class)->createTag('dk4a-excluded-' . $suffix, true, true);
+        Server::get(OCP\IConfig::class)->setAppValue('mcp', 'hidden_system_tags', json_encode([(string)$tag->getId()], JSON_THROW_ON_ERROR));
+        Server::get(OCP\SystemTag\ISystemTagObjectMapper::class)->assignTags((string)$secret->getId(), 'files', [(string)$tag->getId()]);
+        $out = ['visibleFileId' => $visible->getId(), 'visibleHash' => hash('sha256', $visible->getContent()),
+            'secretFileId' => $secret->getId(), 'secretName' => $secret->getName(), 'excludeTag' => $tag->getId(),
+            'visibleFolderId' => $ownerFolder->getId()];
+        foreach (['visibleShare' => [$visible, $in['a']], 'secondShare' => [$visible, $in['b']],
+            'hiddenShare' => [$secret, $in['a']], 'folderShare' => [$ownerFolder, $in['a']]] as $key => [$node, $cardId]) {
+            $share = $shares->newShare()->setNode($node)->setShareType(IShare::TYPE_DECK)
+                ->setSharedWith((string)$cardId)->setPermissions(1)->setSharedBy($uid);
+            $out[$key] = (int)$shares->createShare($share)->getId();
+        }
+        $share = $shares->newShare()->setNode($ownerFolder)->setShareType(IShare::TYPE_USER)
+            ->setSharedWith(F::EDITOR)->setPermissions(1)->setSharedBy($uid);
+        $out['independentShare'] = $shares->createShare($share)->getFullId();
+        $direct = $shares->createShare($shares->newShare()->setNode($visible)->setShareType(IShare::TYPE_USER)
+            ->setSharedWith(F::EDITOR)->setPermissions(1)->setSharedBy($uid));
+        $out['independentFileShare'] = ['fullId' => $direct->getFullId(), 'id' => $direct->getId(),
+            'fileId' => (int)$direct->getNodeId(), 'type' => $direct->getShareType(),
+            'permissions' => $direct->getPermissions(), 'recipient' => $direct->getSharedWith()];
+        break;
+    case 'files-inspect':
+        $file = $root->getUserFolder($uid)->getById($in['visibleFileId'])[0];
+        $out = ['fileId' => $file->getId(), 'hash' => hash('sha256', $file->getContent())];
+        // Same native source used by the Deck UI, in a fresh process; no visual-browser claim.
+        foreach (['a', 'b'] as $key) {
+            $out[$key] = array_values(array_map(static fn ($attachment): int => (int)$attachment->getId(),
+                array_filter($attachments->findAll($in[$key]), static fn ($attachment): bool => $attachment->getType() === 'file')));
+            sort($out[$key]);
+        }
+        try { $out['independentExists'] = $shares->getShareById($in['independentShare'])->getShareType() === IShare::TYPE_USER; }
+        catch (OCP\Share\Exceptions\ShareNotFound) { $out['independentExists'] = false; }
+        try {
+            $direct = $shares->getShareById($in['independentFileShare']['fullId']);
+            $out['independentFileShare'] = ['fullId' => $direct->getFullId(), 'id' => $direct->getId(),
+                'fileId' => (int)$direct->getNodeId(), 'type' => $direct->getShareType(),
+                'permissions' => $direct->getPermissions(), 'recipient' => $direct->getSharedWith()];
+        } catch (OCP\Share\Exceptions\ShareNotFound) {
+            $out['independentFileShare'] = null;
+        }
+        break;
+    case 'files-tag-visible':
+        Server::get(OCP\SystemTag\ISystemTagObjectMapper::class)->assignTags((string)$in['visibleFileId'], 'files', [(string)$in['excludeTag']]);
+        $out = ['tagged' => true];
+        break;
+    case 'files-scope':
+        $writer = Server::get(OCA\Mcp\Service\Policy\PolicyWriter::class);
+        $state = Server::get(OCA\Mcp\Db\PolicyStateMapper::class)->state();
+        $writer->setResourceScope($state['revision'], 'admin', $in['actor'], 'files', $in['items']);
+        $out = ['changed' => true];
+        break;
+    case 'mcp-card-files':
+        $module = new OCA\Mcp\Tools\Deck\DeckToolModule(OC::$server, $apps, Server::get(Psr\Log\LoggerInterface::class),
+            Server::get(OCP\IURLGenerator::class), Server::get(OCP\AppFramework\Utility\ITimeFactory::class),
+            Server::get(OCP\IUserManager::class), Server::get(OCP\IConfig::class), Server::get(OCP\ISession::class));
+        $policy = Server::get(OCA\Mcp\Service\GrantPolicy::class);
+        $policy->setGrant($uid, 'deck', 'read', true);
+        $policy->setGrant($uid, 'deck', 'edit', $in['deckEdit'] ?? true);
+        $policy->setGrant($uid, 'files', 'read', $in['filesRead'] ?? true);
+        $policy->setGrant($uid, 'files', 'share', false); // Unlink reduces exposure and must not require this grant.
+        $registry = new OCA\Mcp\Tools\ToolRegistry([$module], $policy, $apps, Server::get(OCP\IUserManager::class),
+            Server::get(Psr\Log\LoggerInterface::class));
+        $tool = ($in['unlink'] ?? false) ? 'deck_unlink_card_file' : 'deck_list_card_files';
+        try { $out = ['result' => $policy->within($uid, fn () => $registry->call($tool, $in['arguments'], $uid))]; }
+        catch (InvalidArgumentException) { $out = ['refused' => true]; }
+        break;
     case 'mcp-dependency':
         $module = new OCA\Mcp\Tools\Deck\DeckToolModule(OC::$server, $apps, Server::get(Psr\Log\LoggerInterface::class),
             Server::get(OCP\IURLGenerator::class), Server::get(OCP\AppFramework\Utility\ITimeFactory::class),

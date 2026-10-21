@@ -41,6 +41,14 @@ final class SourceParserTest extends TestCase {
         return $surface['methods'];
     }
 
+    public function testSelectsTheNamedClassAfterAHelperInterface(): void {
+        $methods = $this->methodsOf(<<<'PHP'
+            interface Helper { public function unrelated(string $value): void; }
+            class Event { public function intended(int $id): void {} }
+            PHP);
+        self::assertSame(['intended' => ['id']], $methods);
+    }
+
     public function testAnAttributeOnAPromotedParameterKeepsEveryParameter(): void {
         $methods = $this->methodsOf(<<<'PHP'
             class Event {

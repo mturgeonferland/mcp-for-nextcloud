@@ -305,6 +305,8 @@ final class DeckPlanRendererTest extends TestCase {
 	/** Every write tool of the module renders a plan of its own: none falls back to the generic field list. */
 	public function testEveryWriteToolHasAReadablePlan(): void {
 		$this->assertEveryWriteToolHasAReadablePlan($this->module, [
+			'deck_unlink_card_file' => ['file' => ['name' => 'report.txt'], 'card' => ['title' => 'Card'],
+				'createdBy' => 'another-member', 'board' => ['name' => 'Board']],
 			'deck_edit_card_labels' => ['card'=>['title'=>'Card'], 'board'=>['name'=>'Board'],
 				'before'=>[['id'=>1,'title'=>'Keep']], 'after'=>[['id'=>2,'title'=>'Add']]],
 			'deck_create_card' => $this->module->preview('deck_create_card', ['stackId' => 10, 'title' => 'Comprar café'], 'alice'),
@@ -391,6 +393,8 @@ final class DeckPlanRendererTest extends TestCase {
 
 	public function testAssigneePlanSurvivesTheHostileTextContract(): void {
 		$this->assertEveryWriteToolHasAReadablePlan($this->module, [
+			'deck_unlink_card_file' => ['file' => ['name' => 'report.txt'], 'card' => ['title' => 'Card'],
+				'createdBy' => 'another-member', 'board' => ['name' => 'Board']],
 			'deck_edit_card_labels' => ['card'=>['title'=>'Card'], 'board'=>['name'=>'Board'],
 				'before'=>[['id'=>1,'title'=>'Keep']], 'after'=>[['id'=>2,'title'=>'Add']]],
 			'deck_create_card' => $this->module->preview('deck_create_card', ['stackId' => 10, 'title' => 'Comprar café'], 'alice'),

@@ -52,6 +52,9 @@ final class DeckMessages {
 	public const PARAM_LABEL_ADD = 'Label IDs to assign incrementally, from the card board (maximum 100).';
 	public const PARAM_LABEL_REMOVE = 'Label IDs to unassign incrementally, from the card board (maximum 100).';
 
+	public const PARAM_ATTACHMENT_ID = 'Bare native type-12 Deck file share ID returned as attachmentId by deck_list_card_files, not fileId. Legacy deck_file and folders are unsupported.';
+	public const TOOL_CARD_FILES_DESCRIPTION = 'Lists only visible existing native file associations of a readable Deck card. Requires deck.read and files.read, Files resource scope, exclusion tags and native node READ. No legacy deck_file or folders, no upload, no hidden count/handle; IDs are association/share IDs distinct from fileId. All visible items ordered by attachmentId; native Card attachmentCount stays omitted.';
+	public const TOOL_UNLINK_FILE_DESCRIPTION = 'Unlinks one visible native file association, preserving the original file and other shares. Requires deck.edit and files.read, active editable source and Files scope/tags/node READ; no files.share grant is needed. Revokes this type-12 share for all current/future card members, including a share created by someone else; independent shares may retain access. Preview first, repeat plan_state and the exact file_state receipt with confirm:true. file_state is accepted only on confirm; invalid/replayed/stale receipt, hidden and nonexistent association share one refusal. A confirmed absent association is a no-op only with valid original HMAC and the original file still visible. Never unlinks invisible files, legacy deck_file or folders.';
 	public const PARAM_DEPENDENCY_TARGET = 'Readable target card ID. For native assignDependentCard(A,B), A is cardId and B is targetId.';
 	public const TOOL_ADD_DEPENDENCY_DESCRIPTION = 'Adds one native outgoing Deck dependency cardId -> targetId on NC34/35. Requires deck.edit, origin EDIT and target READ. Refuses self-relations and cycles detectable in the bounded readable graph (100 nodes, 500 edges, depth 20); never promises a global DAG. Cycles through unreadable cards and the final check-to-write race cannot be excluded. Other links are preserved; duplicate is a no-op. Preview first, then confirm:true with the returned plan_state.';
 	public const TOOL_REMOVE_DEPENDENCY_DESCRIPTION = 'Removes only cardId -> targetId through the native Deck API on NC34/35. Requires deck.edit, origin EDIT and target READ even for removal. Hidden and nonexistent targets have the same refusal; no hidden count or handle. Missing relation is a no-op. Preview first, then confirm:true with the returned plan_state.';
@@ -483,6 +486,36 @@ final class DeckMessages {
 	/** @return string Localized dependency change message. */
 	public static function dependencyWriteLimitations(): string {
 		return Translator::t('Only the requested relation changes. Cycles through unreadable cards cannot be detected. A concurrent change between the final check and the native write can still create a cycle.');
+	}
+
+	/** @return string Localized file association message. */
+	public static function fileSourceInactive(): string {
+		return Translator::t('File association changes require an active card and board.');
+	}
+
+	/** @return string Localized file association message. */
+	public static function filePlanChanged(): string {
+		return Translator::t('The file association state changed. Request a new plan before confirming.');
+	}
+
+	/** @return string Localized file association message. */
+	public static function fileUnconfirmed(): string {
+		return Translator::t('The file association result could not be confirmed. Check the Deck interface; do not repeat the unlink automatically.');
+	}
+
+	/** @return string Localized file association message. */
+	public static function fileUnlinkObserved(): string {
+		return Translator::t('The association was absent after a native failure. Another actor may have removed it; this does not prove which operation removed it.');
+	}
+
+	/** @return string Localized file association message. */
+	public static function fileUnlinkWarning(): string {
+		return Translator::t('The original file is preserved. Unlinking revokes this association for all current and future card members, including when another member created it. Independent shares may still provide access. This removes only a native file share, never a legacy upload or folder.');
+	}
+
+	/** @return string Exactly the native denied/missing public refusal; no hidden-association marker. */
+	public static function fileUnavailable(): string {
+		return self::errorNotFoundOrForbidden();
 	}
 
 }

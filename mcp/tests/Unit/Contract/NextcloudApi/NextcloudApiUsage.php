@@ -84,6 +84,10 @@ final class NextcloudApiUsage {
         'OCA\\Deck\\Service\\BoardService::find' => ['boardId', 'fullDetails', 'allowDeleted'],
         'OCA\\Deck\\Service\\BoardService::findAll' => ['since', 'fullDetails', 'includeArchived'],
         'OCA\\Deck\\Service\\BoardService::setUserId' => ['userId'],
+        'OCA\\Deck\\Service\\AttachmentService::delete' => ['cardId', 'attachmentId', 'type'],
+        'OCA\\Deck\\Sharing\\DeckShareProvider::getSharedWithByType' => ['cardId', 'shareType', 'limit', 'offset'],
+        'OCA\\Deck\\Sharing\\DeckShareProvider::getShareById' => ['id'],
+        'OCA\\Deck\\Sharing\\DeckShareProvider::getSharesByPath' => ['path'],
         'OCA\\Deck\\Service\\CardService::create' => ['title', 'stackId', 'type', 'order', 'owner', 'description', 'duedate'],
         'OCA\\Deck\\Service\\CardService::delete' => ['id'],
         'OCA\\Deck\\Service\\CardService::find' => ['cardId'],
@@ -198,6 +202,9 @@ final class NextcloudApiUsage {
         ],
         'OCA\\Deck\\Service\\AssignmentService::unassignUser' => [
             'type' => '0, the user type: the module unassigns users only',
+        ],
+        'OCA\\Deck\\Sharing\\DeckShareProvider::getShareById' => [
+            'recipientId' => 'null: resolve the parent association only after the module checks READ on its source card',
         ],
         'OCA\\Deck\\Service\\CardService::create' => [
             'startdate' => 'null (Deck 1.18+): a new card has no start date',

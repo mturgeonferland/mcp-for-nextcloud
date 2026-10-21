@@ -1,6 +1,15 @@
 OC.L10N.register(
     "mcp",
     {
+    "List Deck card files" : "Listar arquivos do card do Deck",
+    "Unlink Deck card file" : "Desvincular arquivo do card do Deck",
+    "Unlink %s from Deck card %s." : "Desvincular %s do card do Deck %s.",
+    "Association created by: %s" : "Vínculo criado por: %s",
+    "File association changes require an active card and board." : "Alterações de vínculos de arquivos exigem card e quadro ativos.",
+    "The file association state changed. Request a new plan before confirming." : "O estado do vínculo do arquivo mudou. Solicite um novo plano antes de confirmar.",
+    "The file association result could not be confirmed. Check the Deck interface; do not repeat the unlink automatically." : "Não foi possível confirmar o resultado do vínculo do arquivo. Confira na interface do Deck; não repita a desvinculação automaticamente.",
+    "The association was absent after a native failure. Another actor may have removed it; this does not prove which operation removed it." : "O vínculo estava ausente após uma falha nativa. Outro usuário pode tê-lo removido; isso não prova qual operação o removeu.",
+    "The original file is preserved. Unlinking revokes this association for all current and future card members, including when another member created it. Independent shares may still provide access. This removes only a native file share, never a legacy upload or folder." : "O arquivo original é preservado. Desvincular revoga este vínculo para todos os membros atuais e futuros do card, inclusive quando outro membro o criou. Compartilhamentos independentes ainda podem permitir acesso. Somente o compartilhamento nativo de arquivo é removido, nunca um upload legado ou pasta.",
     "Add Deck card dependency" : "Adicionar dependência entre cards do Deck",
     "Remove Deck card dependency" : "Remover dependência entre cards do Deck",
     "present" : "presente",

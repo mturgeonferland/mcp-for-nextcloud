@@ -10,6 +10,8 @@ namespace OCA\Mcp\Tools\Deck;
 use OCA\Deck\Db\Board;
 use OCA\Deck\Db\Card;
 use OCA\Deck\Db\Stack;
+use OCP\Files\File;
+use OCP\Share\IShare;
 
 /**
  * The Deck access the handlers are allowed to use.
@@ -63,6 +65,59 @@ interface DeckGatewayInterface {
 	 * @throws \Throwable On refusal or native failure; persistence requires read-back.
 	 */
 	public function changeDependency(string $userId, int $originId, int $targetId, bool $assign, array $expected): void;
+
+	/**
+	 * Fresh native parent context for file reads/writes; no native attachment metadata/count is returned.
+	 * @param string $userId Authenticated caller.
+	 * @param int $cardId Source card.
+	 * @param bool $edit Require EDIT and active card/board for a mutation.
+	 * @return array{card: Card, boardId: int, board: array} Internal authorized context.
+	 * @throws \Throwable On missing/denied card, inactive parents or uncertain lookup.
+	 */
+	public function cardFileContext(string $userId, int $cardId, bool $edit): array;
+
+	/**
+	 * Native type-12 file shares after source READ. Internal only: callers MUST filter through Files guards.
+	 * @param string $userId Authenticated caller.
+	 * @param int $cardId Readable source.
+	 * @return list<IShare> Native associations; never serialize directly.
+	 * @throws \Throwable On denied source or provider failure.
+	 */
+	public function cardFileShares(string $userId, int $cardId): array;
+
+	/**
+	 * One native file association after source READ and exact type/card identity checks.
+	 * @param string $userId Authenticated caller.
+	 * @param int $cardId Readable source.
+	 * @param int $attachmentId Bare share ID, distinct from fileid.
+	 * @return IShare|null Internal association, null only for native ShareNotFound.
+	 * @throws \Throwable For wrong-card/type, source denial or uncertain lookup.
+	 */
+	public function cardFileShare(string $userId, int $cardId, int $attachmentId): ?IShare;
+
+	/**
+	 * Observes a previously authorized association through the provider's unfiltered original-file query.
+	 * This avoids mistaking a trash/inaccessible node (ShareNotFound in getShareById) for a deleted share.
+	 * @param string $userId Authenticated caller, source READ still required.
+	 * @param int $cardId Source of a previously authorized unlink attempt.
+	 * @param int $attachmentId Previously authorized share ID.
+	 * @param File $node Previously authorized original node; only its stable ID is used after unlink.
+	 * @return bool Whether that exact association remains; no other share data leaves the gateway.
+	 * @throws \Throwable On uncertain provider lookup or changed source/card binding.
+	 */
+	public function cardFileShareExists(string $userId, int $cardId, int $attachmentId, File $node): bool;
+
+	/**
+	 * Revalidates native source and association identity, then uses AttachmentService::delete(..., 'file').
+	 * @param string $userId Authenticated caller.
+	 * @param int $cardId Editable active source.
+	 * @param int $attachmentId Share ID of the visible file association.
+	 * @param array<string, mixed> $expected Expected identity from an authorized Files state.
+	 * @return void
+	 * @throws DeckConflictException Before the native API when identity changed.
+	 * @throws \Throwable On denial or native error, possibly after persistence.
+	 */
+	public function unlinkCardFile(string $userId, int $cardId, int $attachmentId, array $expected): void;
 
 	/**
 	 * Fresh editable card, active parents and board-local labels. Inherited foreign links remain internal.

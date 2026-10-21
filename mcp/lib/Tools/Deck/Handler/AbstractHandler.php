@@ -10,6 +10,7 @@ namespace OCA\Mcp\Tools\Deck\Handler;
 use InvalidArgumentException;
 use OCA\Deck\Db\Assignment;
 use OCA\Deck\Db\Stack;
+use OCA\Mcp\Service\Policy\PolicyUnavailable;
 use OCA\Mcp\Tools\ArgumentValidationException;
 use OCA\Mcp\Tools\Deck\DeckConflictException;
 use OCA\Mcp\Tools\Deck\DeckErrors;
@@ -82,7 +83,7 @@ abstract class AbstractHandler {
 	protected function run(callable $operation): array {
 		try {
 			return DeckResult::ok($operation());
-		} catch (PlanChanged $e) {
+		} catch (PlanChanged|PolicyUnavailable $e) {
 			throw $e;
 		} catch (InvalidArgumentException $e) {
 			throw $e;

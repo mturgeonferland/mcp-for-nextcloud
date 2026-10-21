@@ -10,94 +10,31 @@ namespace OCA\Mcp\Tests\Integration\Guests;
 use OCA\Mcp\Service\GrantPolicy;
 use OCA\Mcp\Service\Policy\PolicyWriter;
 use OCA\Mcp\Tests\Integration\Deck\DeckFixture;
-use OCA\Mcp\Tests\Integration\Fixtures;
 use OCA\Mcp\Tests\Integration\IntegrationTestCase;
-use OCA\Mcp\Tests\Integration\Support\Credential;
 use OCA\Mcp\Tests\Integration\Support\Http;
 use OCA\Mcp\Tests\Integration\Support\LoginFactory;
-use OCA\Mcp\Tests\Integration\Support\McpClient;
-use OCP\App\IAppManager;
 use OCP\IConfig;
-use OCP\IUserManager;
 use OCP\Server;
 use OCP\Share\IShare;
-use RuntimeException;
 
-/** Native WebDAV and MCP parity for the same guest, URI and file bytes. */
+/**
+ * Native WebDAV and MCP parity for the same guest, URI and file bytes.
+ */
 final class GuestDeckParityTest extends IntegrationTestCase {
+    use GuestTestSupport;
+
     private const GUEST = 'mcp-it-parity-guest';
     private const MOUNT = 'mcp-it-parity-ext';
-    private static bool $enabledHere = false;
-    /** @var array<string, Credential> Native and MCP credentials of this disposable guest. */
-    private static array $logins = [];
-    /** @var list<string> Full provider IDs owned by this scenario, deleted before the external mount. */
-    private array $shares = [];
-    private ?int $mountId = null;
-
-    /** Prepare a separate disposable guest and the grants needed by the positive controls.
-     * @return void
-     */
-    public static function setUpBeforeClass(): void {
-        parent::setUpBeforeClass();
-        $apps = Server::get(IAppManager::class);
-        if (!$apps->isEnabledForAnyone('guests')) {
-            self::occ('app:enable', 'guests');
-            self::$enabledHere = true;
-        }
-        // Created before this process looks the guest up: the backend remembers an account it did not find.
-        putenv('OC_PASS=' . bin2hex(random_bytes(24)));
-        try {
-            self::occ('guests:add', Fixtures::ALICE, 'mcp-it-parity-guest@example.org', '--uid=' . self::GUEST, '--password-from-env', '--display-name=Guest');
-        } finally {
-            putenv('OC_PASS');
-        }
-        GuestDeckParityProbe::registerBackend($apps);
-        $guest = Server::get(IUserManager::class)->get(self::GUEST)
-            ?? throw new RuntimeException('The guest account is not visible in the test process: ' . implode(' ', self::occ('user:info', self::GUEST)));
-        // A guest gets no disk space by default; the sharing scenario uploads one small file.
-        $guest->setQuota('10 MB');
-        $policy = Server::get(GrantPolicy::class);
-        $policy->setGlobalEnabled(true);
-        $policy->setEligible(self::GUEST, true);
-        $policy->setConnected(self::GUEST, true);
-        $policy->setGrant(self::GUEST, 'files', 'share', true);
-        // The editable received-share control requires the Files edit grant.
-        $policy->setGrant(self::GUEST, 'files', 'edit', true);
-        $policy->setGrant(self::GUEST, 'deck', 'read', true);
-    }
-
-    /** Delete this class's account and restore the Guests app lifecycle.
-     * @return void
-     */
-    public static function tearDownAfterClass(): void {
-        self::$logins = [];
-        try {
-            self::occ('user:delete', self::GUEST);
-        } finally {
-            foreach (['whitelist', 'usewhitelist', 'hide_users', 'allow_external_storage'] as $key) {
-                self::occ('config:app:delete', 'guests', $key);
-            }
-            if (self::$enabledHere) {
-                self::occ('app:disable', 'guests');
-            }
-        }
-        parent::tearDownAfterClass();
-    }
+    private GuestScenario $scenario;
 
     /**
-     * Remove the mount only after the scenario's native resource cleanup has completed.
+     * Configure this class's positive grant controls.
      *
+     * @param GrantPolicy $policy Policy of the disposable container.
      * @return void
      */
-    protected function tearDown(): void {
-        try {
-            if ($this->mountId !== null) {
-                self::occ('files_external:delete', '--yes', (string)$this->mountId);
-                $this->mountId = null;
-            }
-        } finally {
-            parent::tearDown();
-        }
+    protected static function grantGuestControls(GrantPolicy $policy): void {
+        $policy->setGrant(self::GUEST, 'deck', 'read', true);
     }
 
     /**
@@ -121,12 +58,15 @@ final class GuestDeckParityTest extends IntegrationTestCase {
      * @return void
      */
     private function restoreGrant(string $module, string $operation, ?string $previous): void {
-        if ($previous === null) {
-            Server::get(PolicyWriter::class)->resetOverride(self::GUEST, $module, $operation);
-        } else {
-            Server::get(GrantPolicy::class)->setGrant(self::GUEST, $module, $operation, $previous === '1');
-        }
-        $this->assertSame($previous, $this->grantState($module, $operation), 'Restore the previous override, including inheritance');
+        $this->scenario->cleanup(function () use ($module, $operation, $previous): void {
+            if ($previous === null) {
+                Server::get(PolicyWriter::class)->resetOverride(self::GUEST, $module, $operation);
+            } else {
+                Server::get(GrantPolicy::class)->setGrant(self::GUEST, $module, $operation, $previous === '1');
+            }
+            $observed = $this->grantState($module, $operation);
+            $this->scenario->check(fn () => $this->assertSame($previous, $observed, 'Restore the previous override, including inheritance'));
+        });
     }
 
     /**
@@ -138,11 +78,12 @@ final class GuestDeckParityTest extends IntegrationTestCase {
         $config = Server::get(IConfig::class);
         $hiddenTags = $config->getAppValue('mcp', 'hidden_system_tags', '[]');
         $policy = Server::get(GrantPolicy::class);
-        $config->setAppValue('mcp', 'hidden_system_tags', '[]');
         $previousDeckEdit = $this->grantState('deck', 'edit');
-        $f = ['mount' => self::MOUNT, 'suffix' => bin2hex(random_bytes(6))];
-        $policy->setGrant(self::GUEST, 'deck', 'edit', true);
-        try {
+        $f = ['mount' => self::MOUNT, 'suffix' => bin2hex(random_bytes(self::PARITY_SUFFIX_BYTES))];
+        $this->scenario = new GuestScenario();
+        $this->scenario->run(function () use ($config, $policy, &$f): void {
+            $config->setAppValue('mcp', 'hidden_system_tags', '[]');
+            $policy->setGrant(self::GUEST, 'deck', 'edit', true);
             $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'mcp,deck',
                 'allow_external_storage' => 'yes', 'hide_users' => 'no']);
             $out = self::occ('files_external:create', '--output=json', '/' . self::MOUNT, 'local', 'null::null', '-c', 'datadir=/mcp-it-ext');
@@ -261,75 +202,15 @@ final class GuestDeckParityTest extends IntegrationTestCase {
             $this->assertSame([$f['externalShare'], $f['homeShare']], $observed['attachments']);
             $this->assertSame($f['independent'], $observed['independent']);
             $this->assertSame($f['guestShare'], $observed['guestShare']);
-        } finally {
-            try {
+        }, function () use ($config, $hiddenTags, $previousDeckEdit, &$f): void {
+            $this->scenario->cleanup(function () use (&$f): void {
                 $clean = DeckFixture::run(DeckFixture::OWNER, 'guest-external-cleanup', $f + ['shares' => $this->shares]);
                 $this->observe('PARITY cleanup ' . json_encode($clean, JSON_THROW_ON_ERROR));
-                $this->assertSame(['shares' => [], 'files' => [], 'boards' => []], $clean);
+                $this->scenario->check(fn () => $this->assertSame(['shares' => [], 'files' => [], 'boards' => []], $clean));
                 $this->shares = [];
-            } finally {
-                $config->setAppValue('mcp', 'hidden_system_tags', $hiddenTags);
-                $this->restoreGrant('deck', 'edit', $previousDeckEdit);
-            }
-        }
-    }
-
-    /**
-     * Resolve the download and upload links of one confirmed checkout.
-     *
-     * @param McpClient $client The guest MCP client.
-     * @param string $path Canonical received-share path.
-     * @return array{string, string} Download and upload URLs.
-     */
-    private function checkout(McpClient $client, string $path): array {
-        $reply = $client->write('files_checkout', ['path' => $path]);
-        $this->assertTrue($reply->ok(), 'files_checkout: ' . $reply->raw);
-        $out = (array)$reply->json();
-        return [Http::BASE . (string)parse_url((string)$out['download_url'], PHP_URL_PATH),
-            Http::BASE . (string)parse_url((string)$out['upload_url'], PHP_URL_PATH)];
-    }
-
-    /**
-     * Apply the Guests settings needed by the current phase.
-     *
-     * @param array<string, string> $values Guests settings for this scenario.
-     * @return void
-     */
-    private function guests(array $values): void {
-        foreach ($values as $key => $value) {
-            self::occ('config:app:set', 'guests', $key, '--value=' . $value);
-        }
-    }
-
-    /** Build one MCP client for the disposable guest.
-     * @param string $kind Basic or Bearer authentication.
-     * @return McpClient Client bound to that login.
-     */
-    private function mcp(string $kind): McpClient {
-        return new McpClient(self::$logins[$kind] ??= $kind === 'bearer' ? LoginFactory::bearer(self::GUEST) : LoginFactory::basic(self::GUEST));
-    }
-
-    /** Record non-secret native and MCP comparison results.
-     * @param string $line Observation written into the run artifacts.
-     * @return void
-     */
-    private function observe(string $line): void {
-        file_put_contents('/tmp/mcp-it-observations.txt', '[' . self::class . '] ' . $line . "\n", FILE_APPEND);
-    }
-
-    /**
-     * Execute the native administrative fixture command inside the disposable container.
-     *
-     * @param string ...$arguments Native occ command and arguments.
-     * @return list<string> Output lines; a nonzero exit throws.
-     */
-    private static function occ(string ...$arguments): array {
-        $command = 'php ' . escapeshellarg((getenv('NEXTCLOUD_ROOT') ?: '/var/www/html') . '/occ') . ' --no-interaction '
-            . implode(' ', array_map('escapeshellarg', $arguments)) . ' 2>&1';
-        exec($command, $output, $status);
-        if ($status !== 0) {
-            throw new RuntimeException('occ ' . implode(' ', $arguments) . " failed ($status): " . implode("\n", $output));
-        }
-        return $output;
+            });
+            $this->scenario->cleanup(fn () => $config->setAppValue('mcp', 'hidden_system_tags', $hiddenTags));
+            $this->restoreGrant('deck', 'edit', $previousDeckEdit);
+        });
     }
 }

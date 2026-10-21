@@ -10,17 +10,14 @@ namespace OCA\Mcp\Tests\Integration\Guests;
 use OCA\Mcp\Service\GrantPolicy;
 use OCA\Mcp\Tests\Integration\Fixtures;
 use OCA\Mcp\Tests\Integration\IntegrationTestCase;
-use OCA\Mcp\Tests\Integration\Support\Credential;
 use OCA\Mcp\Tests\Integration\Support\DavClient;
 use OCA\Mcp\Tests\Integration\Support\Http;
 use OCA\Mcp\Tests\Integration\Support\LoginFactory;
 use OCA\Mcp\Tests\Integration\Support\McpClient;
 use OCA\Mcp\Tools\Deck\DeckCapabilities;
 use OCP\App\IAppManager;
-use OCP\IUserManager;
 use OCP\Server;
 use OCP\Share\IShare;
-use RuntimeException;
 
 /**
  * The restrictions of the Guests app hold for a guest account on the MCP endpoint whatever the login: an app password
@@ -32,45 +29,22 @@ use RuntimeException;
  * and a group backend every other test would otherwise see.
  */
 final class GuestRestrictionsTest extends IntegrationTestCase {
+    use GuestTestSupport;
+
     private const GUEST = 'mcp-it-guest';
     private const MOUNT = 'mcp-it-guest-ext';
-    /** Modules of an app Guests does not always allow, with that app (GrantMatrix::MODULE_APPS). */
+    /**
+     * Modules of an app Guests does not always allow, with that app (GrantMatrix::MODULE_APPS).
+     */
     private const OTHER_APPS = ['calendar' => 'calendar', 'notes' => 'notes', 'talk' => 'spreed', 'deck' => 'deck', 'contacts' => 'contacts'];
 
-    private static bool $enabledHere = false;
-    /** @var array<string, Credential> */
-    private static array $logins = [];
-
-    /** @var list<string> ids of the shares a scenario created, removed afterwards */
-    private array $shares = [];
-    private ?int $mountId = null;
-
-    public static function setUpBeforeClass(): void {
-        parent::setUpBeforeClass();
-        $apps = Server::get(IAppManager::class);
-        if (!$apps->isEnabledForAnyone('guests')) {
-            self::occ('app:enable', 'guests');
-            self::$enabledHere = true;
-        }
-        // Created before this process looks the guest up: the backend remembers an account it did not find.
-        putenv('OC_PASS=' . bin2hex(random_bytes(24)));
-        try {
-            self::occ('guests:add', Fixtures::ALICE, 'mcp-it-guest@example.org', '--uid=' . self::GUEST, '--password-from-env', '--display-name=Guest');
-        } finally {
-            putenv('OC_PASS');
-        }
-        GuestDeckParityProbe::registerBackend($apps);
-        $guest = Server::get(IUserManager::class)->get(self::GUEST)
-            ?? throw new RuntimeException('The guest account is not visible in the test process: ' . implode(' ', self::occ('user:info', self::GUEST)));
-        // A guest gets no disk space by default; the sharing scenario uploads one small file.
-        $guest->setQuota('10 MB');
-        $policy = Server::get(GrantPolicy::class);
-        $policy->setGlobalEnabled(true);
-        $policy->setEligible(self::GUEST, true);
-        $policy->setConnected(self::GUEST, true);
-        $policy->setGrant(self::GUEST, 'files', 'share', true);
-        // files_checkout is a files.edit; alice is the control, a user who is no guest.
-        $policy->setGrant(self::GUEST, 'files', 'edit', true);
+    /**
+     * Configure this class's positive grant controls.
+     *
+     * @param GrantPolicy $policy Policy of the disposable container.
+     * @return void
+     */
+    protected static function grantGuestControls(GrantPolicy $policy): void {
         $policy->setEligible(Fixtures::ALICE, true);
         $policy->setConnected(Fixtures::ALICE, true);
         $policy->setGrant(Fixtures::ALICE, 'files', 'edit', true);
@@ -79,39 +53,26 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         }
     }
 
-    public static function tearDownAfterClass(): void {
-        self::$logins = [];
-        try {
-            self::occ('user:delete', self::GUEST);
-        } finally {
-            foreach (['whitelist', 'usewhitelist', 'hide_users', 'allow_external_storage'] as $key) {
-                self::occ('config:app:delete', 'guests', $key);
-            }
-            if (self::$enabledHere) {
-                self::occ('app:disable', 'guests');
-            }
-        }
-        parent::tearDownAfterClass();
-    }
-
-    protected function tearDown(): void {
+    /**
+     * Remove only the share rows created by the restrictions scenarios.
+     *
+     * @return void
+     */
+    protected function releaseGuestShares(): void {
         if ($this->shares !== []) {
             // Rows of this test only; the shared file stays in the guest's home.
             $qb = $this->official()->getQueryBuilder();
             $qb->delete('share')->where($qb->expr()->in('id', $qb->createNamedParameter($this->shares, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_STR_ARRAY)))->executeStatement();
             $this->shares = [];
         }
-        if ($this->mountId !== null) {
-            self::occ('files_external:delete', '--yes', (string)$this->mountId);
-            $this->mountId = null;
-        }
-        parent::tearDown();
     }
 
     /**
      * With a list of apps for guests that does not hold this app, the endpoint refuses the guest. Over Basic the refusal
      * is Guests' own error page, whose status the core turns into 500 on Nextcloud 35 (header() before
      * http_response_code()); over Bearer it is this app's 403.
+     *
+     * @return void
      */
     public function testTheAppWhitelistRefusesTheGuestOnBothLogins(): void {
         $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'files_sharing,activity']);
@@ -122,7 +83,11 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         $this->assertSame(403, $bearer, 'bearer login of a guest while this app is not in the Guests whitelist');
     }
 
-    /** Guests hides external storage from guests unless the administrator allows it. */
+    /**
+     * Guests hides external storage from guests unless the administrator allows it.
+     *
+     * @return void
+     */
     public function testExternalStorageStaysHiddenFromTheGuestOnBothLogins(): void {
         $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'files_sharing,activity,mcp', 'allow_external_storage' => 'no']);
         $out = self::occ('files_external:create', '--output=json', '/' . self::MOUNT, 'local', 'null::null', '-c', 'datadir=/mcp-it-ext');
@@ -141,7 +106,11 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         }
     }
 
-    /** Control: with "hide other accounts" off, the same sharing goes through on both logins. */
+    /**
+     * Control: with "hide other accounts" off, the same sharing goes through on both logins.
+     *
+     * @return void
+     */
     public function testWithoutHideUsersTheGuestSharesWithBobOnBothLogins(): void {
         $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'files_sharing,activity,mcp', 'hide_users' => 'no']);
         foreach (['basic', 'bearer'] as $kind) {
@@ -154,6 +123,8 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
     /**
      * With "hide other accounts" on (the Guests default), Guests turns "share only with members of my groups" on for
      * guests. The guest shares no group with bob, so sharing a file with bob is refused.
+     *
+     * @return void
      */
     public function testHideUsersRefusesASharingOutsideTheGuestsGroupsOnBothLogins(): void {
         $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'files_sharing,activity,mcp', 'hide_users' => 'yes']);
@@ -164,9 +135,15 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         }
     }
 
-    /** @return array{bool, bool, string} whether files_share answered success, whether bob got a share, and the raw answer */
+    /**
+     * Attempt a planned share with Bob and inspect its native result.
+     *
+     * @param string $kind Basic or Bearer authentication.
+     * @param string $label Observation label for the current policy control.
+     * @return array{bool, bool, string} Tool success, whether Bob received a share, and the raw reply.
+     */
     private function shareWithBob(string $kind, string $label): array {
-        $path = '/guest-share-' . $kind . '-' . bin2hex(random_bytes(3)) . '.txt';
+        $path = '/guest-share-' . $kind . '-' . bin2hex(random_bytes(self::SHORT_SUFFIX_BYTES)) . '.txt';
         (new DavClient(self::$logins['basic'] ??= LoginFactory::basic(self::GUEST)))->put($path, 'guest');
         // The plan, then its confirmation, as a client does; a refusal at either step is a refusal.
         $arguments = ['path' => $path, 'with' => 'user:' . Fixtures::BOB, 'permission' => 'view'];
@@ -177,7 +154,7 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         }
         $shared = $this->sharedWithBob($path);
         $this->observe("$label, $kind files_share with bob: " . ($reply->ok() ? 'accepted' : 'refused') . '; share in the core: '
-            . ($shared ? 'EXISTS' : 'none') . ($reply->ok() ? '' : ' (' . mb_substr($reply->raw, 0, 300) . ')'));
+            . ($shared ? 'EXISTS' : 'none') . ($reply->ok() ? '' : ' (' . mb_substr($reply->raw, 0, self::MAX_OBSERVATION_CHARS) . ')'));
         return [$reply->ok(), $shared, $reply->raw];
     }
 
@@ -185,6 +162,8 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
      * With only this app on the Guests list, a guest gets no tool of a module whose app is not on it, on both logins;
      * the call is refused as an unknown tool and the notes template is gone. Files (and tasks, over dav) stay: Guests
      * always allows those apps.
+     *
+     * @return void
      */
     public function testWithOnlyThisAppOnTheGuestsListNoModuleOfAnotherAppIsReachable(): void {
         $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'mcp']);
@@ -205,7 +184,11 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         }
     }
 
-    /** New Deck tools use the same Guests gate as the original tools, with both HTTP login methods. */
+    /**
+     * New Deck tools use the same Guests gate as the original tools, with both HTTP login methods.
+     *
+     * @return void
+     */
     public function testNewDeckToolsFollowTheGuestsWhitelistOnBothLogins(): void {
         $policy = Server::get(GrantPolicy::class);
         $policy->setGrant(self::GUEST, 'deck', 'edit', true);
@@ -240,7 +223,11 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         }
     }
 
-    /** With Calendar added to the list, the Calendar module comes back, and only it. */
+    /**
+     * With Calendar added to the list, the Calendar module comes back, and only it.
+     *
+     * @return void
+     */
     public function testWithCalendarOnTheGuestsListOnlyTheCalendarModuleIsAdded(): void {
         $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'mcp,calendar']);
         $seen = [];
@@ -261,16 +248,18 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
      * A checkout link carries no session, so Guests never restricted its owner. Links a guest got while this app was on
      * the Guests list stop working once it is taken off: the download and the upload are refused like an unknown link
      * and the file keeps its bytes. The links of alice, who is no guest, keep working.
+     *
+     * @return void
      */
     public function testTakingThisAppOffTheGuestsListStopsTheGuestsEarlierCheckoutLinks(): void {
         $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'files_sharing,activity,mcp']);
         $links = [];
         foreach (['basic', 'bearer'] as $kind) {
-            $path = '/guest-checkout-' . $kind . '-' . bin2hex(random_bytes(3)) . '.txt';
+            $path = '/guest-checkout-' . $kind . '-' . bin2hex(random_bytes(self::SHORT_SUFFIX_BYTES)) . '.txt';
             $this->dav(self::GUEST)->put($path, 'original');
             $links[$kind] = [$path, $this->checkout($this->mcp($kind), $path)];
         }
-        $alicePath = '/alice-checkout-' . bin2hex(random_bytes(3)) . '.txt';
+        $alicePath = '/alice-checkout-' . bin2hex(random_bytes(self::SHORT_SUFFIX_BYTES)) . '.txt';
         $this->dav(Fixtures::ALICE)->put($alicePath, 'original');
         $alice = $this->checkout(new McpClient(self::$logins['alice'] ??= LoginFactory::basic(Fixtures::ALICE)), $alicePath);
 
@@ -295,7 +284,11 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         $this->assertSame('original', $control['body']);
     }
 
-    /** External storage hidden after the link was issued: the link no longer reaches a file on it. */
+    /**
+     * External storage hidden after the link was issued: the link no longer reaches a file on it.
+     *
+     * @return void
+     */
     public function testExternalStorageHiddenAfterTheCheckoutIsOutOfReachOfTheLink(): void {
         $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'files_sharing,activity,mcp', 'allow_external_storage' => 'yes']);
         $out = self::occ('files_external:create', '--output=json', '/' . self::MOUNT, 'local', 'null::null', '-c', 'datadir=/mcp-it-ext');
@@ -304,7 +297,7 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         // A full setup of the guest's files records the new mount in the mount cache: on Nextcloud 32 a file of a mount
         // the cache does not know yet is not found by its id.
         self::occ('files:scan', self::GUEST);
-        $path = '/' . self::MOUNT . '/guest-ext-' . bin2hex(random_bytes(3)) . '.txt';
+        $path = '/' . self::MOUNT . '/guest-ext-' . bin2hex(random_bytes(self::SHORT_SUFFIX_BYTES)) . '.txt';
         $this->dav(self::GUEST)->put($path, 'external');
         [$download] = $this->checkout($this->mcp('bearer'), $path);
 
@@ -319,21 +312,23 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         }
     }
 
+    /**
+     * Build the native WebDAV client for the guest or the non-guest control.
+     *
+     * @param string $uid Native UID to authenticate.
+     * @return DavClient Client using that UID's app password.
+     */
     private function dav(string $uid): DavClient {
         $key = $uid === self::GUEST ? 'basic' : 'alice';
         return new DavClient(self::$logins[$key] ??= LoginFactory::basic($uid));
     }
 
-    /** @return array{string, string} the download and the upload link of a checkout of the path */
-    private function checkout(McpClient $client, string $path): array {
-        $reply = $client->write('files_checkout', ['path' => $path]);
-        $this->assertTrue($reply->ok(), 'files_checkout: ' . $reply->raw);
-        $out = (array)$reply->json();
-        return [Http::BASE . (string)parse_url((string)$out['download_url'], PHP_URL_PATH),
-            Http::BASE . (string)parse_url((string)$out['upload_url'], PHP_URL_PATH)];
-    }
-
-    /** @return list<string> the modules (tool name prefix) of the tools/list answer, guide left out */
+    /**
+     * List the modules exposed to this guest, excluding the guide.
+     *
+     * @param string $kind Basic or Bearer authentication.
+     * @return list<string> Unique module prefixes in tools/list.
+     */
     private function modules(string $kind): array {
         $names = array_column((array)($this->rpc($kind, 'tools/list')['result']['tools'] ?? []), 'name');
         $this->assertNotSame([], $names, "$kind tools/list answered");
@@ -342,12 +337,23 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         return array_values(array_diff($modules, ['mcp']));
     }
 
-    /** @return list<string> the uri templates of resources/templates/list */
+    /**
+     * List the resource URI templates exposed to this guest.
+     *
+     * @param string $kind Basic or Bearer authentication.
+     * @return list<string> URI templates returned by resources/templates/list.
+     */
     private function templates(string $kind): array {
         return array_column((array)($this->rpc($kind, 'resources/templates/list')['result']['resourceTemplates'] ?? []), 'uriTemplate');
     }
 
-    /** @return array<string, mixed> the decoded JSON-RPC answer of one method without parameters */
+    /**
+     * Call one parameterless JSON-RPC method as this guest.
+     *
+     * @param string $kind Basic or Bearer authentication.
+     * @param string $method JSON-RPC method to invoke.
+     * @return array<string, mixed> Decoded JSON-RPC response.
+     */
     private function rpc(string $kind, string $method): array {
         $response = Http::request('POST', Http::BASE . '/index.php/apps/mcp/', [
             'Authorization: ' . (self::$logins[$kind] ??= $kind === 'bearer' ? LoginFactory::bearer(self::GUEST) : LoginFactory::basic(self::GUEST))->authorization(),
@@ -359,18 +365,12 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         return is_array($decoded) ? $decoded : [];
     }
 
-    /** @param array<string, string> $values Guests settings for this scenario */
-    private function guests(array $values): void {
-        foreach ($values as $key => $value) {
-            self::occ('config:app:set', 'guests', $key, '--value=' . $value);
-        }
-    }
-
-    private function mcp(string $kind): McpClient {
-        return new McpClient(self::$logins[$kind] ??= $kind === 'bearer' ? LoginFactory::bearer(self::GUEST) : LoginFactory::basic(self::GUEST));
-    }
-
-    /** Read from the share table, so this process never sets up the guest's files (Guests is not booted here). */
+    /**
+     * Read from the share table, so this process never sets up the guest's files (Guests is not booted here).
+     *
+     * @param string $path Guest-relative path of the candidate share.
+     * @return bool Whether Bob received a native share of this file.
+     */
     private function sharedWithBob(string $path): bool {
         $qb = $this->official()->getQueryBuilder();
         $result = $qb->select('id')->from('share')
@@ -383,20 +383,5 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         $result->closeCursor();
         array_push($this->shares, ...$ids);
         return $ids !== [];
-    }
-
-    private function observe(string $line): void {
-        file_put_contents('/tmp/mcp-it-observations.txt', '[' . self::class . '] ' . $line . "\n", FILE_APPEND);
-    }
-
-    /** @return list<string> output lines of one occ command, which must succeed */
-    private static function occ(string ...$arguments): array {
-        $command = 'php ' . escapeshellarg((getenv('NEXTCLOUD_ROOT') ?: '/var/www/html') . '/occ') . ' --no-interaction '
-            . implode(' ', array_map('escapeshellarg', $arguments)) . ' 2>&1';
-        exec($command, $output, $status);
-        if ($status !== 0) {
-            throw new RuntimeException('occ ' . implode(' ', $arguments) . " failed ($status): " . implode("\n", $output));
-        }
-        return $output;
     }
 }

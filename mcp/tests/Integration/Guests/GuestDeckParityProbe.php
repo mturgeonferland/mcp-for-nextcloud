@@ -14,10 +14,14 @@ use OCA\Mcp\Tests\Integration\Support\Http;
 use OCA\Mcp\Tests\Integration\Support\McpClient;
 use OCP\App\IAppManager;
 use OCP\IUserManager;
+use OCP\Constants;
+use OCP\Share\IShare;
 use OCP\Server;
 use RuntimeException;
 
-/** Native WebDAV uses the same UID's app password; the app's OAuth token has an MCP-only audience. */
+/**
+ * Native WebDAV uses the same UID's app password; the app's OAuth token has an MCP-only audience.
+ */
 final class GuestDeckParityProbe {
     /**
      * Register the native guest backend in a CLI actor without booting Guests' HTTP URI restrictions.
@@ -61,7 +65,7 @@ final class GuestDeckParityProbe {
     public static function editableShare(Credential $owner, string $path, string $recipient): array {
         $reply = Http::request('POST', Http::BASE . '/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json',
             ['Authorization: ' . $owner->authorization(), 'OCS-APIRequest: true', 'Content-Type: application/x-www-form-urlencoded'],
-            http_build_query(['path' => $path, 'shareType' => 0, 'shareWith' => $recipient, 'permissions' => 3]));
+            http_build_query(['path' => $path, 'shareType' => IShare::TYPE_USER, 'shareWith' => $recipient, 'permissions' => Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE]));
         $out = json_decode($reply['body'], true);
         if ($reply['status'] !== 200 || ($out['ocs']['meta']['statuscode'] ?? null) !== 200) {
             throw new RuntimeException('Native owner share fixture failed: ' . $reply['body']);

@@ -54,6 +54,11 @@ function cardReadable(CardService $cards, int $id): bool {
     try { $cards->find($id); return true; }
     catch (OCA\Deck\NoPermissionException $e) { return false; }
 }
+if (str_starts_with($action, 'guest-')) {
+    echo json_encode(OCA\Mcp\Tests\Integration\Guests\GuestDeckParityFixture::run($uid, $action, $in), JSON_THROW_ON_ERROR);
+    exit;
+}
+
 switch ($action) {
     case 'invalid-provisioning':
         $commands = [

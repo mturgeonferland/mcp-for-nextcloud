@@ -15,6 +15,7 @@ use OCA\Mcp\Tests\Integration\Support\DavClient;
 use OCA\Mcp\Tests\Integration\Support\Http;
 use OCA\Mcp\Tests\Integration\Support\LoginFactory;
 use OCA\Mcp\Tests\Integration\Support\McpClient;
+use OCA\Mcp\Tools\Deck\DeckCapabilities;
 use OCP\App\IAppManager;
 use OCP\IUserManager;
 use OCP\Server;
@@ -58,7 +59,7 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         } finally {
             putenv('OC_PASS');
         }
-        self::registerGuestBackendHere($apps);
+        GuestDeckParityProbe::registerBackend($apps);
         $guest = Server::get(IUserManager::class)->get(self::GUEST)
             ?? throw new RuntimeException('The guest account is not visible in the test process: ' . implode(' ', self::occ('user:info', self::GUEST)));
         // A guest gets no disk space by default; the sharing scenario uploads one small file.
@@ -210,7 +211,9 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
         $policy->setGrant(self::GUEST, 'deck', 'edit', true);
         $tools = ['deck_list_labels', 'deck_edit_card_labels', 'deck_list_card_files', 'deck_unlink_card_file'];
         $dependencies = ['deck_read_card_dependencies', 'deck_add_card_dependency', 'deck_remove_card_dependency'];
-        $hasDependencies = version_compare(Server::get(IAppManager::class)->getAppVersion('deck'), '1.18.0', '>=');
+        // The CLI test process loads the same native autoloader that a normal web request boots.
+        Server::get(IAppManager::class)->loadApp('deck');
+        $hasDependencies = Server::get(DeckCapabilities::class)->dependencies();
         try {
             foreach (['basic', 'bearer'] as $kind) {
                 $this->guests(['usewhitelist' => 'yes', 'whitelist' => 'mcp,deck']);
@@ -384,36 +387,6 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
 
     private function observe(string $line): void {
         file_put_contents('/tmp/mcp-it-observations.txt', '[' . self::class . '] ' . $line . "\n", FILE_APPEND);
-    }
-
-    /**
-     * The user backend of the guest accounts in this process too (the consent of the token, the policy setters and
-     * the file checks look the guest up). The app was enabled after this process loaded its apps, so its classes and
-     * backend are registered here by hand, as its boot would.
-     */
-    private static function registerGuestBackendHere(IAppManager $apps): void {
-        $path = $apps->getAppPath('guests');
-        if (!class_exists(\OCA\Guests\UserBackend::class)) {
-            if (is_file($path . '/composer/autoload.php')) {
-                require_once $path . '/composer/autoload.php';
-            }
-            spl_autoload_register(static function (string $class) use ($path): void {
-                if (str_starts_with($class, 'OCA\\Guests\\')) {
-                    $file = $path . '/lib/' . str_replace('\\', '/', substr($class, strlen('OCA\\Guests\\'))) . '.php';
-                    if (is_file($file)) {
-                        require $file;
-                    }
-                }
-            });
-        }
-        $users = Server::get(IUserManager::class);
-        foreach ($users->getBackends() as $backend) {
-            if ($backend instanceof \OCA\Guests\UserBackend) {
-                return;
-            }
-        }
-        // Through the app's own container, which holds the app config the backend needs on every major.
-        $users->registerBackend((new \OCA\Guests\AppInfo\Application())->getContainer()->get(\OCA\Guests\UserBackend::class));
     }
 
     /** @return list<string> output lines of one occ command, which must succeed */

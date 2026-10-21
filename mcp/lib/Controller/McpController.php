@@ -13,6 +13,7 @@ use OCA\Mcp\L10n\UserL10n;
 use OCA\Mcp\OAuth\AccessTokenAuthenticator;
 use OCA\Mcp\OAuth\ResourceUrl;
 use OCA\Mcp\Service\GrantPolicy;
+use OCA\Mcp\Service\GuestRestrictions;
 use OCA\Mcp\Service\McpProtocol;
 use OCA\Mcp\Service\Policy\CauseProcessor;
 use OCA\Mcp\Service\Policy\PolicyUnavailable;
@@ -46,6 +47,7 @@ class McpController extends Controller {
         private AccessTokenAuthenticator $tokens,
         private UserL10n $l10n,
         private CauseProcessor $causes,
+        private GuestRestrictions $guests,
     ) {
         parent::__construct($appName, $request);
     }
@@ -137,6 +139,11 @@ class McpController extends Controller {
                 }
                 if ($bearer) {
                     $this->bindSession($user, $sessionUser);
+                }
+                // Guests sets up its restrictions for a guest only on its boot with a user already in the session; an
+                // app password logs in after that boot and a Bearer token here, so they are set up for every request.
+                if (!$this->guests->apply($user)) {
+                    return new McpResponse('', 403);
                 }
                 // Both the Basic and the OAuth path end here with the authenticated user, whose account language wins.
                 Translator::use($this->l10n->forUser($user));

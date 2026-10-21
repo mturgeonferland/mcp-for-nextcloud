@@ -12,7 +12,9 @@ use OCA\Mcp\Service\Policy\PolicyUnavailable;
 use InvalidArgumentException;
 use OCA\Mcp\L10n\Translator;
 use OCA\Mcp\Service\Compat\AppEnablement;
+use OCA\Mcp\Service\GrantMatrix;
 use OCA\Mcp\Service\GrantPolicy;
+use OCA\Mcp\Service\GuestRestrictions;
 use OCA\Mcp\Tools\Common\NodeAccess;
 use OCP\App\IAppManager;
 use OCP\IUserManager;
@@ -29,13 +31,17 @@ use Psr\Log\LoggerInterface;
 class ToolRegistry {
     private ?ToolGuide $guide = null;
 
-    /** @param list<ToolModule> $modules explicit module list, in tools/list order */
+    /**
+     * @param list<ToolModule> $modules explicit module list, in tools/list order
+     * @param GuestRestrictions|null $guests the apps Guests allows a guest; null only in tests without Guests
+     */
     public function __construct(
         private array $modules,
         private GrantPolicy $policy,
         private IAppManager $appManager,
         private IUserManager $userManager,
         private LoggerInterface $logger,
+        private ?GuestRestrictions $guests = null,
     ) {}
 
     /**
@@ -283,6 +289,11 @@ class ToolRegistry {
             return false;
         }
         if (!$granted) {
+            return false;
+        }
+        // A guest reaches a module only when Guests allows the app behind it, and the tool's own app when it names one.
+        if ($this->guests !== null && (!$this->guests->allowsApp($userId, GrantMatrix::MODULE_APPS[$definition['module']] ?? '')
+            || !$this->guests->allowsApp($userId, $definition['app'] ?? ''))) {
             return false;
         }
         if (isset($definition['app'])) {

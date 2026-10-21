@@ -14,6 +14,7 @@ use OCA\Mcp\L10n\Translator;
 use OCA\Mcp\L10n\UserL10n;
 use OCA\Mcp\OAuth\TokenHasher;
 use OCA\Mcp\Service\GrantPolicy;
+use OCA\Mcp\Service\GuestRestrictions;
 use OCA\Mcp\Tools\Common\NodeAccess;
 use OCA\Mcp\Tools\Common\CommonMessages;
 use OCA\Mcp\Tools\Common\LockAwareWrite;
@@ -92,6 +93,7 @@ class CheckoutController extends Controller {
         private ?\OCA\Mcp\Service\Scope\FilesAccessGuard $visibilityGuard = null,
         private ?FileCreation $creation = null,
         private ?LockAwareWrite $locks = null,
+        private ?GuestRestrictions $guests = null,
     ) {
         parent::__construct($appName, $request);
     }
@@ -508,12 +510,21 @@ class CheckoutController extends Controller {
      * @return bool true when the account is there and enabled
      */
     /**
-     * The policy of the link's owner, read again on every use of an issued link (contracts §4.3): enabled account,
-     * connection allowed and the files grant of this step, resolved with groups like any MCP request, in one snapshot.
+     * The policy of the link's owner, read again on every use of an issued link (contracts §4.3): the Guests
+     * restrictions of a guest owner, enabled account, connection allowed and the files grant of this step, resolved
+     * with groups like any MCP request, in one snapshot.
      *
-     * @return Response|null 403 when the policy refuses, 503 when it cannot be resolved now; null to proceed
+     * @return Response|null 404 for a guest Guests refuses, 403 when the policy refuses, 503 when it cannot be resolved
+     *     now; null to proceed
      */
     private function admit(string $uid, string $operation): ?Response {
+        // The link carries no session, so Guests never set up its restrictions for its owner: the app list and the
+        // filter of external storage are applied here, before a file is resolved. A guest refused is answered like an
+        // unknown link, so the answer tells nothing about the link.
+        $owner = $this->userManager?->get($uid);
+        if ($owner !== null && $this->guests !== null && !$this->guests->applyToOwner($owner)) {
+            return $this->refuse(Http::STATUS_NOT_FOUND, FilesMessages::tokenInvalid());
+        }
         try {
             $allowed = $this->ownerUsable($uid) && $this->policy->within($uid,
                 fn (): bool => $this->policy->canConnect($uid) && $this->policy->granted($uid, self::MODULE, $operation));

@@ -10,6 +10,7 @@ namespace OCA\Mcp\AppInfo;
 use OCA\Mcp\Service\GrantPolicy;
 use OCA\Mcp\Service\McpProtocol;
 use OCA\Mcp\Service\PromptCatalog;
+use OCA\Mcp\Service\GuestRestrictions;
 use OCA\Mcp\Service\ResourceRegistry;
 use OCA\Mcp\Service\UserTimezone;
 use OCA\Mcp\Service\VisibilityGuard;
@@ -124,6 +125,7 @@ class Application extends App implements IBootstrap {
             $c->get(IAppManager::class),
             $c->get(IUserManager::class),
             $c->get(LoggerInterface::class),
+            $c->get(GuestRestrictions::class),
         ));
         $context->registerService(ResourceRegistry::class, static fn (ContainerInterface $c): ResourceRegistry => new ResourceRegistry(
             $c->get(ToolRegistry::class),
@@ -137,6 +139,7 @@ class Application extends App implements IBootstrap {
             $c->get(ToolRegistry::class)->guide(),
             // nc://files answers to the Files gate, the resource scope included; nc://notes keeps the plain guard (D4).
             $c->get(\OCA\Mcp\Service\Scope\FilesAccessGuard::class),
+            $c->get(GuestRestrictions::class),
         ));
         $context->registerService(McpProtocol::class, static fn (ContainerInterface $c): McpProtocol => new McpProtocol(
             $c->get(ToolRegistry::class),

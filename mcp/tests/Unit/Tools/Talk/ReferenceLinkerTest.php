@@ -165,6 +165,21 @@ class ReferenceLinkerTest extends TestCase {
         $this->linker->resolve('alice', ['type' => 'deck_card', 'card_id' => 7]);
     }
 
+    /** A guest whose Guests list lacks Deck cannot reference a card, as if Deck were off; nothing is read. */
+    public function testADeckGuestsDoesNotAllowIsTheSameAsADeckThatIsOff(): void {
+        $guests = $this->createMock(\OCA\Mcp\Service\GuestRestrictions::class);
+        $guests->method('allowsApp')->willReturnCallback(static fn (string $uid, string $app): bool => $app !== 'deck');
+        $classification = new Classification();
+        $linker = new ReferenceLinker($this->deck, $this->calendars, $this->store, new EventRepository($this->store, $classification),
+            $classification, $this->appManager, $this->users, $this->grants, $this->urls, $guests);
+        $this->deck->expects($this->never())->method('findCard');
+
+        $this->expectException(ConversationAccessException::class);
+        $this->expectExceptionMessage(Messages::referenceDeckOff());
+
+        $linker->resolve('alice', ['type' => 'deck_card', 'card_id' => 7]);
+    }
+
     public function testAnEventIsLinkedTheWayTheServerSearchLinksIt(): void {
         $this->givenCalendar();
         $this->givenEvent('ev-1', 'Reunião de vendas');

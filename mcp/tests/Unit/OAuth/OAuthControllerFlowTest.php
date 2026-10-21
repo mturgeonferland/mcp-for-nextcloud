@@ -15,7 +15,6 @@ use OCA\Mcp\OAuth\ResourceUrl;
 use OCA\Mcp\OAuth\TokenService;
 use OCA\Mcp\Service\GrantPolicy;
 use OCP\AppFramework\Http\JSONResponse;
-use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\IRequest;
 use OCP\ISession;
@@ -70,7 +69,7 @@ final class OAuthControllerFlowTest extends TestCase {
     }
 
     /** @return array<string,string> the headers, read without the server container OCP needs for getHeaders() */
-    private function headers(JSONResponse $response): array {
+    private function headers(\OCP\AppFramework\Http\Response $response): array {
         $property = new \ReflectionProperty(\OCP\AppFramework\Http\Response::class, 'headers');
         $property->setAccessible(true);
         return $property->getValue($response);
@@ -93,9 +92,17 @@ final class OAuthControllerFlowTest extends TestCase {
 
         $response = $controller->consent($pending, 'allow');
 
-        $this->assertInstanceOf(RedirectResponse::class, $response);
-        parse_str((string)parse_url($response->getRedirectURL(), PHP_URL_QUERY), $query);
+        $this->assertInstanceOf(TemplateResponse::class, $response);
+        parse_str((string)parse_url($response->getParams()['target'], PHP_URL_QUERY), $query);
         $this->assertSame('CODE', $query['code']);
+        $this->assertSame('S', $query['state']);
+        $this->assertSame(self::ISSUER, $query['iss']);
+        $this->assertSame('https://claude.ai/cb', strtok($response->getParams()['target'], '?'));
+        $this->assertSame(200, $response->getStatus(), 'finish the form POST before starting callback navigation');
+        $this->assertSame('oauth-redirect', $response->getTemplateName());
+        $this->assertSame('no-store', $this->headers($response)['Cache-Control']);
+        $this->assertSame('no-referrer', $this->headers($response)['Referrer-Policy']);
+        $this->assertStringNotContainsString('claude.ai', $response->getContentSecurityPolicy()->buildPolicy());
     }
 
     /** A storage failure of the policy writer is temporarily_unavailable for the client, never a 500 or a code. */
@@ -106,8 +113,8 @@ final class OAuthControllerFlowTest extends TestCase {
 
         $response = $controller->consent($pending, 'allow');
 
-        $this->assertInstanceOf(RedirectResponse::class, $response);
-        parse_str((string)parse_url($response->getRedirectURL(), PHP_URL_QUERY), $query);
+        $this->assertInstanceOf(TemplateResponse::class, $response);
+        parse_str((string)parse_url($response->getParams()['target'], PHP_URL_QUERY), $query);
         $this->assertSame('temporarily_unavailable', $query['error']);
         $this->assertArrayNotHasKey('code', $query);
     }
@@ -149,8 +156,8 @@ final class OAuthControllerFlowTest extends TestCase {
 
             $response = $controller->consent($pending, $decision);
 
-            $this->assertInstanceOf(RedirectResponse::class, $response, $decision);
-            parse_str((string)parse_url($response->getRedirectURL(), PHP_URL_QUERY), $query);
+            $this->assertInstanceOf(TemplateResponse::class, $response, $decision);
+            parse_str((string)parse_url($response->getParams()['target'], PHP_URL_QUERY), $query);
             $this->assertSame('access_denied', $query['error'], $decision);
             $this->assertArrayNotHasKey('code', $query);
         }
@@ -172,7 +179,7 @@ final class OAuthControllerFlowTest extends TestCase {
         $pending = $this->authorize($controller);
         $this->tokens->expects($this->once())->method('consent')->willReturn('CODE');
 
-        $this->assertInstanceOf(RedirectResponse::class, $controller->consent($pending, 'allow'));
+        $this->assertSame('oauth-redirect', $controller->consent($pending, 'allow')->getTemplateName());
         $second = $controller->consent($pending, 'allow');
 
         $this->assertInstanceOf(TemplateResponse::class, $second);
@@ -217,8 +224,8 @@ final class OAuthControllerFlowTest extends TestCase {
         $this->eligible = null;
         $this->tokens->expects($this->never())->method('consent');
         $response = $controller->consent($pending, 'allow');
-        $this->assertInstanceOf(RedirectResponse::class, $response);
-        parse_str((string)parse_url($response->getRedirectURL(), PHP_URL_QUERY), $query);
+        $this->assertInstanceOf(TemplateResponse::class, $response);
+        parse_str((string)parse_url($response->getParams()['target'], PHP_URL_QUERY), $query);
         $this->assertSame('temporarily_unavailable', $query['error']);
 
         $this->params = ['client_id' => 'https://claude.ai/c', 'redirect_uri' => 'https://claude.ai/cb', 'response_type' => 'code',

@@ -121,10 +121,23 @@ final class NextcloudApiContractTest extends TestCase {
                 if ($class === \OCP\Config\IUserConfig::class && !in_array($major, self::declaredMajors(), true)) {
                     continue;
                 }
+                if (in_array($class, array_merge(...array_values(NextcloudApiUsage::OUTSIDE_FIXTURES)), true)) {
+                    continue;
+                }
                 $cases["$class @ $major"] = [$class, $major];
             }
         }
         return $cases;
+    }
+
+    /** The classes left outside the fixtures are exactly the ones lib/ names from those apps: none goes unnoticed. */
+    public function testOnlyTheDeclaredClassesAreOutsideTheFixtures(): void {
+        foreach (NextcloudApiUsage::OUTSIDE_FIXTURES as $app => $classes) {
+            $prefix = 'OCA\\' . ucfirst($app) . '\\';
+            $named = array_values(array_filter(array_keys(self::scanner()->classes()), static fn (string $class): bool => str_starts_with($class, $prefix)));
+            sort($named);
+            $this->assertSame($classes, $named, "classes of $app named in lib/");
+        }
     }
 
     #[DataProvider('namedClasses')]

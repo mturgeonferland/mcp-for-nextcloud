@@ -88,6 +88,23 @@ final class FilesScopeTest extends TestCase {
         $this->assertNull($scope->roots('alice', $this->tree->rootFolder()));
     }
 
+    /**
+     * External storage Guests hides from a guest stays out of reach of the gate however the node was resolved: core
+     * does not apply the Guests mount filter to a path mounted on demand (Nextcloud 35).
+     */
+    public function testExternalStorageGuestsHidesIsOutOfReachAndTheRestIsNot(): void {
+        $this->tree->nodes['/alice/files/Archive/old.md']['scope'] = 'external';
+        foreach ([true, false] as $hides) {
+            $guests = $this->createMock(\OCA\Mcp\Service\GuestRestrictions::class);
+            $guests->method('hidesExternalStorage')->willReturnCallback(fn (string $uid): bool => $uid === 'alice' && $hides);
+            $gate = new FilesAccessGuard($this->config->mock($this), $this->tags(), $this->tree->filesystemRoot(), null, null, null, $this->scope(), $guests);
+            $label = $hides ? 'hidden' : 'allowed';
+            $this->assertSame(!$hides, $gate->isVisible($this->node('/Archive/old.md')), "external file, storage $label");
+            $this->assertSame(!$hides, $gate->isTraversable($this->node('/Archive/old.md')), "crossing it, storage $label");
+            $this->assertTrue($gate->isVisible($this->node('/Projects')), "a file of the home, storage $label");
+        }
+    }
+
     public function testANodeIsInsideWhenItOrAnAncestorIsSelected(): void {
         $this->scopes['alice'] = [$this->projects, $this->nested];
         $scope = $this->scope();

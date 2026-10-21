@@ -58,6 +58,7 @@ class ResourceRegistry {
         private NotesRepository $notesRepo,
         private ToolGuide $guide,
         private FilesAccessGuard $filesGuard,
+        private ?GuestRestrictions $guests = null,
     ) {
     }
 
@@ -175,7 +176,8 @@ class ResourceRegistry {
             return false;
         }
         $user = $this->userManager->get($userId);
-        return $user !== null && $this->appManager->isEnabledForUser('notes', $user);
+        return $user !== null && $this->appManager->isEnabledForUser('notes', $user)
+            && ($this->guests === null || $this->guests->allowsApp($userId, 'notes'));
     }
 
     /**

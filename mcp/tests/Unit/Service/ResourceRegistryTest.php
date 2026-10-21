@@ -11,6 +11,7 @@ use InvalidArgumentException;
 use OCA\Mcp\Service\GrantPolicy;
 use OCA\Mcp\Service\McpProtocol;
 use OCA\Mcp\Service\PromptCatalog;
+use OCA\Mcp\Service\GuestRestrictions;
 use OCA\Mcp\Service\ResourceRegistry;
 use OCA\Mcp\Service\VisibilityGuard;
 use OCA\Mcp\Tests\Unit\InMemoryConfig;
@@ -260,6 +261,18 @@ final class ResourceRegistryTest extends TestCase {
         $this->expectException(ToolFailure::class);
         $this->expectExceptionMessage(CommonMessages::notFound());
         $this->registry->read('nc://notes/' . $this->noteId, 'alice');
+    }
+
+    /** A guest whose Guests list lacks Notes gets neither the notes template nor a note; files stay. */
+    public function testAGuestWithoutNotesOnTheGuestsListGetsNoNotesResource(): void {
+        $guests = $this->createMock(GuestRestrictions::class);
+        $guests->method('allowsApp')->willReturnCallback(static fn (string $uid, string $app): bool => $app !== 'notes');
+        $registry = new ResourceRegistry($this->toolRegistry, $this->policy, $this->appManager, $this->userManager, $this->rootFolder,
+            $this->visibilityGuard, $this->extractor, $this->notesRepo, new ToolGuide([]), $this->visibilityGuard, $guests);
+        $this->assertSame(['nc://files/{path}'], array_column($registry->templates('alice')['resourceTemplates'], 'uriTemplate'));
+        $this->expectException(ToolFailure::class);
+        $this->expectExceptionMessage(CommonMessages::notFound());
+        $registry->read('nc://notes/' . $this->noteId, 'alice');
     }
 
     public function testReadNotesWithInvalidIdThrowsNotFound(): void {

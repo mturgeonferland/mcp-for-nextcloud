@@ -10,6 +10,7 @@ namespace OCA\Mcp\Tools\Talk;
 use InvalidArgumentException;
 use OCA\Mcp\Service\Compat\AppEnablement;
 use OCA\Mcp\Service\GrantPolicy;
+use OCA\Mcp\Service\GuestRestrictions;
 use OCA\Mcp\Tools\Calendar\ScopedCalendarAccess;
 use OCA\Mcp\Tools\Calendar\CalendarException;
 use OCA\Mcp\Tools\Calendar\CalendarStore;
@@ -57,6 +58,7 @@ class ReferenceLinker {
         private IUserManager $userManager,
         private GrantPolicy $grants,
         private IURLGenerator $urlGenerator,
+        private ?GuestRestrictions $guests = null,
     ) {}
 
     /**
@@ -187,7 +189,8 @@ class ReferenceLinker {
      */
     private function assertModuleUsable(string $userId, string $module, string $app, string $message): void {
         $user = $this->userManager->get($userId);
-        if ($user === null || !AppEnablement::forUser($this->appManager, $app, $user) || !$this->grants->granted($userId, $module, 'read')) {
+        if ($user === null || !AppEnablement::forUser($this->appManager, $app, $user) || !$this->grants->granted($userId, $module, 'read')
+            || ($this->guests !== null && !$this->guests->allowsApp($userId, $app))) {
             throw new ConversationAccessException($message);
         }
     }

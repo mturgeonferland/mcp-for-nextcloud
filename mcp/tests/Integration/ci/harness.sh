@@ -260,6 +260,14 @@ cmd_fixtures() {
 # from the read-only tools mount, so nothing else is copied.
 install_release_app() {
     app=$1
+    unpack_release_app "$@"
+    occ app:enable "$app"
+}
+
+# unpack_release_app <app> <repo> <tag> <sha256>: the download, check and unpacking of install_release_app, without
+# enabling the app.
+unpack_release_app() {
+    app=$1
     repo=$2
     tag=$3
     sha=$4
@@ -267,7 +275,6 @@ install_release_app() {
     curl -fsSL -o "$archive" "https://github.com/nextcloud-releases/$repo/releases/download/$tag/$app-$tag.tar.gz"
     echo "$sha  $archive" | sha256_check
     docker exec -u www-data "$NC" tar -xzf "/mcp-it-tools/$app.tar.gz" -C /var/www/html/custom_apps
-    occ app:enable "$app"
 }
 
 # Release pinned per Nextcloud major: groupfolders, Talk and Notes each have one build per supported major. The Calendar
@@ -307,6 +314,8 @@ pin_releases() {
             return 1
             ;;
     esac
+    # Guests v4.10.1 declares min-version 32 and max-version 36: one build for the whole matrix.
+    GUESTS_TAG=v4.10.1; GUESTS_SHA=731944e1c881afe9821146974aa48bca9d9bff4249ad774b6bbdc50a48068ba7
 }
 
 provision_groupfolders() {
@@ -381,7 +390,7 @@ cmd_provision() {
     log="$ARTIFACTS/provision.log"
     : > "$log"
     : > "$WORK/provision-failures"
-    parts="groupfolders files_external talk notes calendar"
+    parts="groupfolders files_external talk notes calendar guests"
     [ "${MCP_IT_WITH_DECK:-1}" != 1 ] || parts="$parts deck"
     for part in $parts; do
         echo "=== provisioning $part" | tee -a "$log"
@@ -392,6 +401,9 @@ cmd_provision() {
             notes) step="install_release_app notes notes $NOTES_TAG $NOTES_SHA" ;;
             calendar) step="install_release_app calendar calendar $CAL_TAG $CAL_SHA" ;;
             deck) step=provision_deck ;;
+            # Unpacked only: Guests/GuestRestrictionsTest enables it for its own scenarios, since it adds a user and a
+            # group backend every other test would see.
+            guests) step="unpack_release_app guests guests $GUESTS_TAG $GUESTS_SHA" ;;
         esac
         # Not inside an if or ||: there errexit would be ignored in the subshell and a failing command would not
         # fail the part.

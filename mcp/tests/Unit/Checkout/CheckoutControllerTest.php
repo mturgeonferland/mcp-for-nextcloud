@@ -93,6 +93,10 @@ final class CheckoutControllerTest extends TestCase {
     private bool $aliceExists = true;
     /** Temporary files the controller asked for, i.e. bodies it copied to disk. */
     private int $tempFiles = 0;
+    /** @var bool|null what the Guests restrictions answer for the owner; null builds the controller without them */
+    private ?bool $guestAllowed = null;
+    /** @var list<string> owners the Guests restrictions were applied to, with the folder state at that moment */
+    private array $guestCalls = [];
 
     /** Stages the request body the controller will stream into its temporary file. */
     private function stage(string $body): void {
@@ -171,7 +175,17 @@ final class CheckoutControllerTest extends TestCase {
             $this->temp, $this->time, $this->policy, $this->store, $this->hasher,
             new CheckoutService($urls, $config, $this->time, $this->hasher, $this->store, $this->apps, $this->users), $backup,
             new SharedWriteGuard($access), $access, $this->createMock(LoggerInterface::class),
-            $l10n, $this->users, locks: $this->locks->service($this));
+            $l10n, $this->users, locks: $this->locks->service($this), guests: $this->guests());
+    }
+
+    /** @return \OCA\Mcp\Service\GuestRestrictions|null a double answering {@see self::$guestAllowed}, recording when it ran */
+    private function guests(): ?\OCA\Mcp\Service\GuestRestrictions {
+        $guests = $this->createMock(\OCA\Mcp\Service\GuestRestrictions::class);
+        $guests->method('applyToOwner')->willReturnCallback(function (IUser $owner): bool {
+            $this->guestCalls[] = $owner->getUID() . ($this->tree->opened === [] && $this->tree->ops === [] ? ' before any file' : ' after a file');
+            return $this->guestAllowed ?? true;
+        });
+        return $guests;
     }
 
     /** Stores an upload token for the file, standing for a checkout the agent already made. */
@@ -353,6 +367,40 @@ final class CheckoutControllerTest extends TestCase {
 
         $this->assertSame(403, $this->code($this->controller->uploadPost()));
         $this->assertSame([], $this->tree->ops);
+    }
+
+    /**
+     * A link carries no session, so Guests never restricted its owner: a guest whom Guests no longer lets reach this app
+     * (removed from the guest's app list after the link was issued) is refused before any file is resolved, opened or
+     * written, the link unspent, with the answer of an unknown link.
+     */
+    public function testAGuestOwnerGuestsRefusesCannotUseAnEarlierLink(): void {
+        $this->guestAllowed = false;
+        $this->setUp();
+        $this->issue(CheckoutToken::KIND_DOWNLOAD);
+        $download = $this->controller->download();
+        $this->store->rows = [];
+        $this->issue();
+        $upload = $this->controller->upload();
+
+        foreach (['download' => $download, 'upload' => $upload] as $route => $response) {
+            $this->assertSame(404, $this->code($response), $route);
+            $this->assertSame(FilesMessages::tokenInvalid(), $response->render(), "$route: the answer of an unknown link");
+        }
+        $this->assertSame(['alice before any file', 'alice before any file'], $this->guestCalls);
+        $this->assertSame([], $this->tree->ops, 'nothing was backed up or written');
+        $this->assertNotContains(self::FILE, $this->tree->opened);
+        $this->assertSame('# Ata', $this->tree->nodes[self::FILE]['content']);
+        $this->assertNotContains('consume', $this->store->ops, 'the links were not spent');
+    }
+
+    /** The same owner with Guests letting them through, or a user who is no guest: the link works as before. */
+    public function testAnOwnerGuestsLetsThroughUsesTheLinkAsBefore(): void {
+        $this->guestAllowed = true;
+        $this->setUp();
+        $this->issue();
+        $this->assertSame(200, $this->code($this->controller->upload()));
+        $this->assertSame(['alice before any file'], $this->guestCalls);
     }
 
     public function testADisabledAccountCannotDownloadWithAnEarlierLink(): void {

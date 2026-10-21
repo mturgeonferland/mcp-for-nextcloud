@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace OCA\Mcp\Service\Scope;
 
+use OCA\Mcp\Service\GuestRestrictions;
 use OCA\Mcp\Service\Policy\PolicyUnavailable;
 use OCA\Mcp\Service\VisibilityGuard;
 use OCP\EventDispatcher\IEventDispatcher;
@@ -38,6 +39,7 @@ class FilesAccessGuard extends VisibilityGuard {
         ?LoggerInterface $logger = null,
         ?IEventDispatcher $events = null,
         private ?FilesScope $scope = null,
+        private ?GuestRestrictions $guests = null,
     ) {
         parent::__construct($config, $tagMapper, $rootFolder, $tagManager, $logger, $events);
     }
@@ -51,12 +53,29 @@ class FilesAccessGuard extends VisibilityGuard {
         if ($this->scope !== null && !$this->scope->allows($this->scope->operationUser(), $node)) {
             return false;
         }
-        return parent::isVisible($node);
+        return $this->reachable($node) && parent::isVisible($node);
     }
 
     /** The exclusion alone: a crossed ancestor is never shown, so the scope does not apply to it. */
     public function isTraversable(Node $node): bool {
-        return parent::isVisible($node);
+        return $this->reachable($node) && parent::isVisible($node);
+    }
+
+    /**
+     * Outside external storage the Guests app hides from the operation's user, whatever the path that resolved the node
+     * ({@see GuestRestrictions::hidesExternalStorage()}).
+     *
+     * @throws PolicyUnavailable when no operation is open
+     */
+    private function reachable(Node $node): bool {
+        if ($this->guests === null || $this->scope === null || !$this->guests->hidesExternalStorage($this->scope->operationUser())) {
+            return true;
+        }
+        try {
+            return !str_starts_with((string)$node->getMountPoint()->getMountType(), 'external');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
@@ -84,7 +103,7 @@ class FilesAccessGuard extends VisibilityGuard {
         if ($roots === null) {
             return null;
         }
-        return array_values(array_filter($roots, fn (Folder $folder): bool => $folder->isReadable() && parent::isVisible($folder)));
+        return array_values(array_filter($roots, fn (Folder $folder): bool => $folder->isReadable() && $this->reachable($folder) && parent::isVisible($folder)));
     }
 
     public function clearCache(): void {

@@ -30,7 +30,7 @@
 - **Plan and confirmation.** A tool that changes something first returns a plan of exactly what it will do; nothing is written until the user approves it.
 - **Excluded from MCP access.** Files and folders carrying the system tags the administrator picks, and everything inside those folders, are invisible to the tools of this connector (the server log tools only while "Hide the text of log messages" is on). While at least one tag is configured, sharing, public links, copying or moving a folder to another directory are refused in MCP so that nothing hidden inside can be exposed indirectly — do those in the Nextcloud web interface; individual files and renaming a folder where it already is keep working. File references inside Talk attachments and task attachments are also left out when they point to an excluded file.
 - **The app never deletes a file.** There is no tool for it, and every edit keeps a backup; Nextcloud versioning applies as usual.
-- **Nextcloud permissions always apply.** The app never widens what a user can already do. A restriction by resource and an exclusion by system tag only narrow what a user reaches: they never add access.
+- **Nextcloud permissions always apply.** The app never widens what a user can already do. A restriction by resource and an exclusion by system tag only narrow what a user reaches: they never add access. A guest of the Guests app keeps the restrictions of Guests on every request, with an app password, OAuth or a checkout link: only the apps allowed to guests, no hidden external storage, and sharing only within the guest's groups when other accounts are hidden.
 
 ## Clients
 
@@ -65,7 +65,7 @@ Nextcloud 32–35 and PHP 8.2 or later. Deck and Talk are optional: their tools 
 - **Plano e confirmação.** Uma ferramenta que altera algo primeiro devolve o plano exato do que vai fazer; nada é gravado antes de o usuário aprovar.
 - **Excluídos do acesso MCP.** Arquivos e pastas com as etiquetas do sistema escolhidas pelo administrador, e tudo dentro dessas pastas, ficam invisíveis às ferramentas deste conector (as ferramentas do log do servidor, apenas com "Esconder o texto das mensagens do log" ligada). Enquanto houver ao menos uma etiqueta configurada, compartilhar, criar link público, copiar ou mover uma pasta para outro diretório é recusado no MCP, para que nada escondido dentro dela possa ser exposto indiretamente — faça essas operações pela interface web do Nextcloud; arquivos avulsos e renomear uma pasta dentro do mesmo diretório continuam funcionando. Referências de arquivo em anexos do Talk e em anexos de tarefas também ficam de fora quando apontam para um arquivo excluído.
 - **O app nunca apaga arquivo.** Não existe ferramenta que exclua um arquivo, e toda edição guarda um backup; o versionamento do Nextcloud funciona como de costume.
-- **As permissões do Nextcloud sempre valem.** O app nunca amplia o que o usuário já pode fazer. A restrição por recurso e a exclusão por etiqueta do sistema só reduzem o que o usuário alcança: nunca acrescentam acesso.
+- **As permissões do Nextcloud sempre valem.** O app nunca amplia o que o usuário já pode fazer. A restrição por recurso e a exclusão por etiqueta do sistema só reduzem o que o usuário alcança: nunca acrescentam acesso. Um convidado do app Guests mantém as restrições do Guests em todo pedido, por senha de app, OAuth ou link de checkout: só os apps liberados aos convidados, nada do armazenamento externo oculto e compartilhamento só com os próprios grupos quando as outras contas estão ocultas.
 
 ## Clientes
 
@@ -100,7 +100,7 @@ Nextcloud 32–35 e PHP 8.2 ou superior. O Deck e o Talk são opcionais: as ferr
 - **Plan y confirmación.** Una herramienta que cambia algo devuelve primero el plan exacto de lo que hará; nada se escribe hasta que el usuario lo aprueba.
 - **Excluidos del acceso MCP.** Los archivos y carpetas con las etiquetas del sistema que elija el administrador, y todo lo que esté dentro de esas carpetas, son invisibles para las herramientas de este conector (las herramientas del registro del servidor, solo con "Ocultar el texto de los mensajes del registro" activada). Mientras haya al menos una etiqueta configurada, compartir, crear un enlace público, copiar o mover una carpeta a otro directorio se rechaza en MCP, para que nada oculto dentro pueda exponerse indirectamente: haga esas operaciones en la interfaz web de Nextcloud; los archivos individuales y renombrar una carpeta dentro del mismo directorio siguen funcionando. Las referencias de archivo en adjuntos de Talk y en adjuntos de tareas también se omiten cuando apuntan a un archivo excluido.
 - **La aplicación nunca borra archivos.** No hay ninguna herramienta que elimine un archivo, y cada edición guarda una copia de seguridad; el control de versiones de Nextcloud funciona como siempre.
-- **Los permisos de Nextcloud siempre se aplican.** La aplicación nunca amplía lo que el usuario ya puede hacer. La restricción por recurso y la exclusión por etiqueta del sistema solo reducen lo que el usuario alcanza: nunca añaden acceso.
+- **Los permisos de Nextcloud siempre se aplican.** La aplicación nunca amplía lo que el usuario ya puede hacer. La restricción por recurso y la exclusión por etiqueta del sistema solo reducen lo que el usuario alcanza: nunca añaden acceso. Un invitado de la aplicación Guests conserva las restricciones de Guests en cada solicitud, con contraseña de aplicación, OAuth o enlace de checkout: solo las aplicaciones permitidas a los invitados, nada del almacenamiento externo oculto y compartir solo con sus propios grupos cuando las demás cuentas están ocultas.
 
 ## Clientes
 
@@ -110,7 +110,7 @@ Claude (claude.ai y Claude Desktop), ChatGPT y Gemini CLI inician sesión con OA
 
 Nextcloud 32–35 y PHP 8.2 o superior. Deck y Talk son opcionales: sus herramientas solo aparecen con la aplicación activa en una versión compatible.
     ]]></description>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
     <licence>AGPL-3.0-or-later</licence>
     <author mail="jhonatan@sintax.tech">Jhonatan Jaworski</author>
     <namespace>Mcp</namespace>

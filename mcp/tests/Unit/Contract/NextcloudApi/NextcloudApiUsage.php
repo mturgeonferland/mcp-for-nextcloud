@@ -30,6 +30,16 @@ final class NextcloudApiUsage {
     ];
 
     /**
+     * Classes lib/ names that the fixtures do not carry, by app: the Guests app is not part of the trees the fixtures are
+     * generated from. {@see \OCA\Mcp\Service\GuestRestrictions} resolves these services by name and refuses the
+     * request when one is missing or fails, and Integration/Guests/GuestRestrictionsTest calls them on the release the
+     * harness pins (guests v4.10.1).
+     */
+    public const OUTSIDE_FIXTURES = [
+        'guests' => ['OCA\\Guests\\AppWhitelist', 'OCA\\Guests\\Config', 'OCA\\Guests\\GuestManager', 'OCA\\Guests\\RestrictionManager'],
+    ];
+
+    /**
      * Classes the fixtures carry although lib/ never names them: objects the app only receives (a Talk participant,
      * a metadata set, the log writer ILogFactory::get() returns) and the Nextcloud plugin whose listener
      * {@see \OCA\Mcp\Tools\Calendar\EmbeddedDavDispatcher} detaches.

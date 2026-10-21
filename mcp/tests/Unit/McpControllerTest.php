@@ -45,6 +45,10 @@ final class McpControllerTest extends TestCase {
     private array $sessionWrites = [];
     /** @var array<string, string> language of each account, by uid */
     private array $languages = ['alice' => 'pt_BR', 'bob' => 'es'];
+    /** @var list<string> uids the Guests restrictions were applied to, with the session `user_id` at that moment */
+    private array $guestCalls = [];
+    /** @var bool answer of GuestRestrictions::apply() */
+    private bool $guestAllowed = true;
 
     protected function tearDown(): void {
         Translator::reset();
@@ -100,9 +104,19 @@ final class McpControllerTest extends TestCase {
         $controller = new TestableMcpController('mcp', $request, $session, $urls, $this->policy, $protocol ?? McpProtocolTest::protocol($this),
             new ResourceUrl($resourceRequest), $this->authenticator,
             new UserL10n(JsonL10n::wire($this->createMock(\OCP\L10N\IFactory::class), $this->languages)),
-            $this->causes);
+            $this->causes, $this->guests());
         $controller->body = $body;
         return $controller;
+    }
+
+    /** @return \OCA\Mcp\Service\GuestRestrictions a double recording whom it was applied to and under which session uid */
+    private function guests(): \OCA\Mcp\Service\GuestRestrictions {
+        $guests = $this->createMock(\OCA\Mcp\Service\GuestRestrictions::class);
+        $guests->method('apply')->willReturnCallback(function (IUser $user): bool {
+            $this->guestCalls[] = $user->getUID() . '@' . ($this->sessionUid ?? 'none');
+            return $this->guestAllowed;
+        });
+        return $guests;
     }
 
     private function listTools(): array {
@@ -498,5 +512,39 @@ final class McpControllerTest extends TestCase {
         $call = $this->controller('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"notes_editor","arguments":{"confirm":true}}}', $protocol)->post();
         $this->assertSame(503, $call->getStatus());
         $this->assertSame('1', self::headers($call)['Retry-After']);
+    }
+
+    /** The Guests restrictions run for a Bearer owner once the owner is the session user, as Guests needs. */
+    public function testGuestRestrictionsApplyToTheBearerOwnerInTheSession(): void {
+        $this->bearerFor('bob');
+        $this->assertSame(200, $this->listTools()[0]);
+        $this->assertSame(['bob@bob'], $this->guestCalls);
+    }
+
+    /** An app password logs in after Guests booted, so its user gets the restrictions here too. */
+    public function testGuestRestrictionsApplyToABasicLogin(): void {
+        $this->assertSame(200, $this->listTools()[0]);
+        $this->assertSame(['alice@alice'], $this->guestCalls);
+    }
+
+    /** A guest Guests refuses (app not allowed, restrictions not applicable) gets 403 and the session keeps no uid. */
+    public function testAGuestRefusedByGuestsIs403AndLeavesNoSessionUser(): void {
+        $this->guestAllowed = false;
+        $this->bearerFor('bob');
+        $seen = 'unset';
+        $response = $this->controller('{"jsonrpc":"2.0","id":1,"method":"tools/list"}', $this->probe($seen))->post();
+        $this->assertSame(403, $response->getStatus());
+        $this->assertSame('unset', $seen, 'the protocol never ran');
+        $this->assertNull($this->sessionUid);
+        $this->login('alice');
+        unset($this->headers['Authorization']);
+        $this->assertSame(403, $this->listTools()[0], 'the same refusal over Basic');
+    }
+
+    /** An account that may not connect is refused before anything of Guests is asked. */
+    public function testGuestRestrictionsAreNotAskedForADeniedAccount(): void {
+        $this->bearerFor('carol');
+        $this->assertSame(403, $this->listTools()[0]);
+        $this->assertSame([], $this->guestCalls);
     }
 }

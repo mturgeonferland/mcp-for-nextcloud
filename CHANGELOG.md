@@ -2,6 +2,18 @@
 
 All notable changes to the native Nextcloud app (`mcp/`). Versions follow `mcp/appinfo/info.xml`.
 
+## 1.1.2
+
+Security release for servers with the **Guests** app. No database change; updating from 1.1.1 needs no step and changes nothing for accounts that are not guests.
+
+### Security
+
+- Guests: the restrictions of the Guests app now apply to a guest on **every MCP request**, with an app password and with OAuth. Guests sets them up only when the session already holds the user when it starts, or on the core login event without its late part; an app password logs in after that and an OAuth token is checked inside the app, so before this release a guest could keep using MCP after this app was taken off the apps allowed to guests, see external storage Guests hides, and share outside the guest's groups although "hide other accounts" forces sharing only within them. All three are now enforced, and the endpoint answers 403 to a guest Guests does not allow here.
+- Guests: the tools, resources (`nc://notes`) and Talk references of a module whose app is not allowed to the guest (Calendar, Notes, Talk, Deck, Contacts, file versions) are left out of `tools/list` and refused. Files and Tasks use apps Guests always allows (`files`, `dav`) and stay available.
+- Guests: **checkout links** (`files_checkout`, `files_upload`) carry no session; they now apply the Guests restrictions to the link's owner before any file is reached, and a link of a guest Guests no longer allows answers like an unknown link, without being spent. With Guests older than 4.8.0, which can only restrict the session user, a guest's checkout link is refused.
+- Guests: on Nextcloud 35 the core mounts external storage by path without the Guests mount filter; the Files tools, `nc://files` and checkout links now refuse a file on external storage that Guests hides from the guest.
+- When the state of Guests cannot be read, the request or the module is refused.
+
 ## 1.1.1
 
 Fix release for the admin screens: group grants, resource scope and the permission matrix. No database change; updating from 1.1.0 needs no step.

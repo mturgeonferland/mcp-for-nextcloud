@@ -11,6 +11,7 @@ Deixe o Claude e outros clientes MCP trabalharem com seus arquivos, notas, calen
 [![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-777bb4?logo=php&logoColor=white)](https://www.php.net)
 [![MCP](https://img.shields.io/badge/MCP-2025--06--18%20%7C%202026--07--28-111)](https://modelcontextprotocol.io)
 [![Licença: AGPL-3.0](https://img.shields.io/badge/Licen%C3%A7a-AGPL--3.0-blue)](#licença)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/jhowjaw/badge.svg)](https://hub.xerj.org/contributors/jhowjaw)
 
 [English](README.md) · Português (Brasil)
 

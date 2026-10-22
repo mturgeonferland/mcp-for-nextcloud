@@ -11,6 +11,7 @@ Let Claude and other MCP clients work with your files, notes, calendars, contact
 [![PHP 8.2+](https://img.shields.io/badge/PHP-8.2%2B-777bb4?logo=php&logoColor=white)](https://www.php.net)
 [![MCP](https://img.shields.io/badge/MCP-2025--06--18%20%7C%202026--07--28-111)](https://modelcontextprotocol.io)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue)](#license)
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/jhowjaw/badge.svg)](https://hub.xerj.org/contributors/jhowjaw)
 
 English · [Português (Brasil)](README.pt-BR.md)
 

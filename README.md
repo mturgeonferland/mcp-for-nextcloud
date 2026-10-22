@@ -13,7 +13,7 @@ Let Claude and other MCP clients work with your files, notes, calendars, contact
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue)](#license)
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/jhowjaw/badge.svg)](https://hub.xerj.org/contributors/jhowjaw)
 
-English · [Português (Brasil)](README.pt-BR.md)
+English · [Português (Brasil)](README.pt-BR.md) · [Deutsch](README.de.md) · [Español](README.es.md)
 
 </div>
 

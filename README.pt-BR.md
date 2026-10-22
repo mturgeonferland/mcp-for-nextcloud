@@ -13,7 +13,7 @@ Deixe o Claude e outros clientes MCP trabalharem com seus arquivos, notas, calen
 [![Licença: AGPL-3.0](https://img.shields.io/badge/Licen%C3%A7a-AGPL--3.0-blue)](#licença)
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/jhowjaw/badge.svg)](https://hub.xerj.org/contributors/jhowjaw)
 
-[English](README.md) · Português (Brasil)
+[English](README.md) · Português (Brasil) · [Deutsch](README.de.md) · [Español](README.es.md)
 
 </div>
 

@@ -34,7 +34,7 @@ final class CardLinkTool {
 	 * @return string Fixed English description, matching the published Deck schema convention.
 	 */
 	public static function description(): string {
-		return 'Link an existing visible file to a Deck card with read-only access for current and future board members. Requires deck.edit, files.read and files.share, native EDIT/READ/SHARE, a complete recipient preview and confirm:true with its plan_state. Guests and incompatible sharing policies are refused. No upload, copy or file deletion.';
+		return 'Links one existing visible file to a Deck card by a native Deck file share, with read-only access for current and future board members. Requires the three grants deck.edit, files.read and files.share, native EDIT/READ/SHARE, a complete recipient preview and confirm:true with its plan_state. The plan names the file, its owner, whether it is a reshare, the current recipient total, a limited name list and the shares you created. Refuses Guests, group-only sharing, a group or team on the board when group sharing is off, mandatory internal expiry, a recipient that is not a fully resolved local user, group or team, folders, archived cards or boards, and any failure to read those facts. Available on Nextcloud 32 through 35. No upload, copy or file deletion. Does not suggest changing a sharing policy or signing in another way. A policy enabled later, a membership change, and the gap between the last check and the native share are outside this check: there is no continuous protection and no automatic revocation.';
 	}
 
 	/**

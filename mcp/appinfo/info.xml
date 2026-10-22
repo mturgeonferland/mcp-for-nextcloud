@@ -15,7 +15,7 @@
 - **Calendar**: list calendars and events, create, edit, move, delete and transfer events through the real CalDAV pipeline, with participants; invitations are sent only when asked.
 - **Contacts**: search and read contacts, create and edit them while keeping every unknown vCard field.
 - **Tasks**: list, read, create, edit, complete and delete tasks, with their categories.
-- **Deck**: boards, lists and cards, a follow-up of the cards you manage, and card assignments.
+- **Deck**: boards, lists and cards, a follow-up of the cards you manage with due time, labels on Nextcloud 32–35, and card assignments. Dependencies only on Nextcloud 34 and 35. List and unlink visible file associations on Nextcloud 32–35, and link one existing file as read-only for current and future board, group and team members when the sharing rules allow. The check applies only when the link is created; a policy or a membership change afterwards, and the gap before the native share, are not corrected automatically. Hidden files and unreadable relations are omitted, with no count. The original file is never deleted.
 - **Talk**: read conversations, reply, message a user, share or quote a file and create group conversations.
 - **Server log**: read and analyze `nextcloud.log`, for administrators or the IT groups they choose. Off by default, read only, IPs masked, the output is treated as untrusted data and every query is audited. With hidden tags configured, an option on by default also hides the text of log messages.
 
@@ -50,7 +50,7 @@ Nextcloud 32–35 and PHP 8.2 or later. Deck and Talk are optional: their tools 
 - **Calendário**: listar calendários e eventos, criar, editar, mover, excluir e transferir eventos pelo CalDAV de verdade, com participantes; os convites só são enviados quando pedidos.
 - **Contatos**: buscar e ler contatos, criar e editar mantendo todos os campos desconhecidos do vCard.
 - **Tarefas**: listar, ler, criar, editar, concluir e excluir tarefas, com as suas categorias.
-- **Deck**: quadros, listas e cartões, um acompanhamento dos cartões que você gerencia e a atribuição de cartões.
+- **Deck**: quadros, listas e cartões, um acompanhamento dos cartões que você gerencia com hora de vencimento, etiquetas no Nextcloud 32–35 e a atribuição de cartões. Dependências só no Nextcloud 34 e 35. Lista e desvincula arquivos visíveis no Nextcloud 32–35, e vincula um arquivo existente como somente leitura para os membros atuais e futuros do quadro, de um grupo ou de uma equipe quando as regras de compartilhamento permitem. A checagem vale só quando o vínculo é criado; uma política ou uma mudança de membros depois, e a janela antes do compartilhamento nativo, não são corrigidas automaticamente. Arquivos ocultos e relações ilegíveis são omitidos, sem contagem. O arquivo original nunca é apagado.
 - **Talk**: ler conversas, responder, mandar mensagem a um usuário, compartilhar ou citar um arquivo e criar conversas em grupo.
 - **Log do servidor**: ler e analisar o `nextcloud.log`, só para administradores ou para os grupos de TI que eles escolherem. Desligado por padrão, somente leitura, IPs mascarados, a saída é tratada como dado não confiável e cada consulta é auditada. Com etiquetas de ocultação configuradas, uma opção ligada por padrão também esconde o texto das mensagens do log.
 
@@ -85,7 +85,7 @@ Nextcloud 32–35 e PHP 8.2 ou superior. O Deck e o Talk são opcionais: as ferr
 - **Calendario**: listar calendarios y eventos, crear, editar, mover, eliminar y transferir eventos por el CalDAV real, con participantes; las invitaciones solo se envían cuando se piden.
 - **Contactos**: buscar y leer contactos, crearlos y editarlos conservando todos los campos desconocidos del vCard.
 - **Tareas**: listar, leer, crear, editar, completar y eliminar tareas, con sus categorías.
-- **Deck**: tableros, listas y tarjetas, un seguimiento de las tarjetas que usted gestiona y la asignación de tarjetas.
+- **Deck**: tableros, listas y tarjetas, un seguimiento de las tarjetas que usted gestiona con hora de vencimiento, etiquetas en Nextcloud 32–35 y la asignación de tarjetas. Dependencias solo en Nextcloud 34 y 35. Lista y desvincula archivos visibles en Nextcloud 32–35, y vincula un archivo existente como solo lectura para los miembros actuales y futuros del tablero, de un grupo o de un equipo cuando las reglas de uso compartido lo permiten. La comprobación vale solo cuando se crea el vínculo; una política o un cambio de miembros posterior, y el intervalo antes del recurso compartido nativo, no se corrigen automáticamente. Los archivos ocultos y las relaciones ilegibles se omiten, sin recuento. El archivo original nunca se borra.
 - **Talk**: leer conversaciones, responder, enviar un mensaje a un usuario, compartir o citar un archivo y crear conversaciones de grupo.
 - **Registro del servidor**: leer y analizar `nextcloud.log`, solo para administradores o para los grupos de TI que ellos elijan. Desactivado por defecto, solo lectura, IPs enmascaradas, la salida se trata como dato no confiable y cada consulta queda auditada. Con etiquetas de ocultación configuradas, una opción activada por defecto también esconde el texto de los mensajes del registro.
 

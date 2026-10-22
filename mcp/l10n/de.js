@@ -492,7 +492,7 @@ OC.L10N.register(
     "The specified path is not a file." : "Der angegebene Pfad ist keine Datei.",
     "The specified path is not a folder." : "Der angegebene Pfad ist kein Ordner.",
     "The specified path is not an image file." : "Der angegebene Pfad ist keine Bilddatei.",
-    "The specified snippet appears %s times in the file; provide a unique snippet." : "Der angegebene Textausschnitt kommt %s-mal in der Datei vor. Gib einen eindeutigen Ausschnitt an.",
+    "The specified snippet appears more than once in the file; provide a longer, unique snippet." : "Der angegebene Textausschnitt kommt mehrmals in der Datei vor. Gib einen längeren, eindeutigen Ausschnitt an.",
     "The specified snippet does not appear in the file." : "Der angegebene Textausschnitt kommt in der Datei nicht vor.",
     "The specified snippet is not valid UTF-8; send it exactly as it appears in the file." : "Der angegebene Textausschnitt ist kein gültiges UTF-8. Sende ihn exakt wie in der Datei.",
     "The task could not be read safely." : "Die Aufgabe konnte nicht sicher gelesen werden.",
@@ -1361,6 +1361,15 @@ OC.L10N.register(
     "Native Deck dependency reading is unavailable on this installation." : "Das Lesen nativer Deck-Abhängigkeiten ist auf dieser Installation nicht verfügbar.",
     "The readable dependency graph exceeds the traversal limits. No incomplete graph was returned." : "Der lesbare Abhängigkeitsgraph überschreitet die Durchlaufgrenzen. Es wurde kein unvollständiger Graph zurückgegeben.",
     "This graph contains only readable cards. Cycles through unreadable cards cannot be detected; a visible graph does not prove that the global graph is acyclic. Native relations do not automatically block task progress." : "Dieser Graph enthält nur lesbare Karten. Zyklen über nicht lesbare Karten können nicht erkannt werden; ein sichtbarer Graph beweist nicht, dass der globale Graph azyklisch ist. Native Beziehungen blockieren den Aufgabenfortschritt nicht automatisch.",
-    "Read Deck card dependencies" : "Abhängigkeiten der Deck-Karte lesen"
+    "Read Deck card dependencies" : "Abhängigkeiten der Deck-Karte lesen",
+    "Use only one of content, append or old/new." : "Verwende nur eines von content, append oder old/new.",
+    "append and old/new need the etag returned by notes_read or by the plan." : "append und old/new brauchen den ETag, den notes_read oder der Plan liefert.",
+    "The note changed since it was read; nothing was written. Current etag: %s" : "Die Notiz wurde seit dem Lesen geändert; es wurde nichts geschrieben. Aktueller ETag: %s",
+    "Nothing was changed. After your approval the text below is added at the end of the note." : "Es wurde nichts geändert. Nach deiner Freigabe wird der folgende Text am Ende der Notiz angefügt.",
+    "Nothing was changed. After your approval the passage below is replaced in the note." : "Es wurde nichts geändert. Nach deiner Freigabe wird die folgende Textstelle in der Notiz ersetzt.",
+    "- Append: %s" : "- Anfügen: %s",
+    "- Replace: %s → %s" : "- Ersetzen: %s → %s",
+    "The note changed since the plan; check it again." : "Die Notiz hat sich seit der Planung geändert. Prüfe sie erneut.",
+    "The specified snippet is longer than %d bytes; send a shorter, unique snippet." : "Der angegebene Textausschnitt ist länger als %d Bytes. Gib einen kürzeren, eindeutigen Ausschnitt an."
 },
 "nplurals=2; plural=(n != 1);");

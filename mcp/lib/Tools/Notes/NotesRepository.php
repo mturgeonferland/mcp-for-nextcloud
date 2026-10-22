@@ -138,10 +138,31 @@ class NotesRepository {
      * @throws ToolFailure when the note exceeds MAX_BYTES
      */
     public function read(File $note): string {
+        return mb_scrub($this->raw($note), 'UTF-8');
+    }
+
+    /**
+     * A note's content exactly as stored, for a change applied on top of it: scrubbing it would rewrite bytes
+     * the change never touched.
+     *
+     * @param File $note readable note file
+     * @return string raw content
+     * @throws ToolFailure when the note exceeds MAX_BYTES
+     */
+    public function raw(File $note): string {
         if ($note->getSize() > self::MAX_BYTES) {
             throw new ToolFailure(NotesMessages::noteTooLargeForReading(self::MAX_BYTES));
         }
-        return mb_scrub((string)$note->getContent(), 'UTF-8');
+        return (string)$note->getContent();
+    }
+
+    /**
+     * @param File $note note file
+     * @param string $userId authenticated user
+     * @return string the note's path relative to the user's folder, as the Files tools take it
+     */
+    public function path(File $note, string $userId): string {
+        return (string)$this->rootFolder->getUserFolder($userId)->getRelativePath($note->getPath());
     }
 
     /**

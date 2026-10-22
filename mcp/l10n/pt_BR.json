@@ -623,7 +623,7 @@
     "The specified path is not a file." : "O caminho informado não é um arquivo.",
     "The specified path is not a folder." : "O caminho informado não é uma pasta.",
     "The specified path is not an image file." : "O caminho informado não é um arquivo de imagem.",
-    "The specified snippet appears %s times in the file; provide a unique snippet." : "O trecho informado aparece %s vezes no arquivo; informe um trecho único.",
+    "The specified snippet appears more than once in the file; provide a longer, unique snippet." : "O trecho informado aparece mais de uma vez no arquivo; informe um trecho maior e único.",
     "The specified snippet does not appear in the file." : "O trecho informado não aparece no arquivo.",
     "The specified snippet is not valid UTF-8; send it exactly as it appears in the file." : "O trecho informado não é UTF-8 válido; envie-o exatamente como aparece no arquivo.",
     "The task could not be read safely." : "Não foi possível ler a tarefa com segurança.",
@@ -1364,6 +1364,15 @@
     "Native Deck dependency reading is unavailable on this installation." : "A leitura de dependências nativas do Deck não está disponível nesta instalação.",
     "The readable dependency graph exceeds the traversal limits. No incomplete graph was returned." : "O grafo de dependências legível excede os limites de travessia. Nenhum grafo incompleto foi retornado.",
     "This graph contains only readable cards. Cycles through unreadable cards cannot be detected; a visible graph does not prove that the global graph is acyclic. Native relations do not automatically block task progress." : "Este grafo contém somente cartões legíveis. Ciclos por cartões ilegíveis não são detectáveis; um grafo visível não prova que o grafo global é acíclico. As relações nativas não bloqueiam automaticamente o andamento das tarefas.",
-    "Read Deck card dependencies" : "Ler dependências do cartão do Deck"
+    "Read Deck card dependencies" : "Ler dependências do cartão do Deck",
+    "Use only one of content, append or old/new." : "Use apenas um entre content, append ou old/new.",
+    "append and old/new need the etag returned by notes_read or by the plan." : "append e old/new exigem o etag devolvido pelo notes_read ou pelo plano.",
+    "The note changed since it was read; nothing was written. Current etag: %s" : "A nota mudou desde a leitura; nada foi gravado. Etag atual: %s",
+    "Nothing was changed. After your approval the text below is added at the end of the note." : "Nada foi alterado. Após sua aprovação, o texto abaixo é acrescentado ao fim da nota.",
+    "Nothing was changed. After your approval the passage below is replaced in the note." : "Nada foi alterado. Após sua aprovação, o trecho abaixo é substituído na nota.",
+    "- Append: %s" : "- Acrescentar: %s",
+    "- Replace: %s → %s" : "- Substituir: %s → %s",
+    "The note changed since the plan; check it again." : "A nota mudou desde o plano; confira de novo.",
+    "The specified snippet is longer than %d bytes; send a shorter, unique snippet." : "O trecho informado passa de %d bytes; envie um trecho menor e único."
 },"pluralForm" :"nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;"
 }

@@ -52,6 +52,9 @@ final class NotesPlanRendererTest extends TestCase {
 			$users,
 			new SharedWriteGuard($access),
 			$access,
+			null,
+			null,
+			new \OCA\Mcp\Tools\PlanState($this->config->mock($this)),
 		);
 		$this->renderer = new NotesPlanRenderer();
 	}
@@ -288,6 +291,46 @@ final class NotesPlanRendererTest extends TestCase {
 		$text = $this->renderer->render('notes_create', $plan);
 		$this->assertNotNull($text);
 		$this->assertStringContainsString('…', $text);
+	}
+
+	/** NT-1: an append or a replace shows only the text the call sends, in every language, and never the note itself. */
+	public function testAppendAndReplacePlansShowOnlyTheChange(): void {
+		$append = $this->module->preview('notes_edit', ['id' => $this->noteId, 'append' => 'Linha 3'], 'alice');
+		$replace = $this->module->preview('notes_edit', ['id' => $this->noteId, 'old' => 'Linha 2', 'new' => 'Linha dois'], 'alice');
+		$expected = [
+			'en' => ['- Append: Linha 3', '- Replace: Linha 2 → Linha dois'],
+			'pt_BR' => ['- Acrescentar: Linha 3', '- Substituir: Linha 2 → Linha dois'],
+			'es' => ['- Añadir: Linha 3', '- Reemplazar: Linha 2 → Linha dois'],
+			'de' => ['- Anfügen: Linha 3', '- Ersetzen: Linha 2 → Linha dois'],
+		];
+		foreach ($expected as $language => [$appendLine, $replaceLine]) {
+			if ($language !== 'en') {
+				Translator::use(new JsonL10n($language));
+			}
+			$appendText = (string)$this->renderer->render('notes_edit', $append);
+			$replaceText = (string)$this->renderer->render('notes_edit', $replace);
+			$this->assertStringContainsString($appendLine, $appendText, $language);
+			$this->assertStringContainsString($replaceLine, $replaceText, $language);
+			$this->assertStringNotContainsString('Linha 1', $appendText . $replaceText, $language);
+		}
+	}
+
+	public function testThePartialPlanTellsTheModelWhichEtagAndPlanStateToConfirmWith(): void {
+		$plan = $this->module->preview('notes_edit', ['id' => $this->noteId, 'append' => 'Linha 3'], 'alice');
+		$text = \OCA\Mcp\Tools\PlanRenderer::render($this->module, 'notes_edit', $plan);
+		$this->assertStringContainsString('To confirm, repeat the call with etag `' . $plan['etag'] . '`.', $text);
+		$this->assertStringContainsString('To confirm, repeat the call with plan_state `' . $plan['plan_state'] . '`.', $text);
+		$this->assertStringContainsString('the text below is added at the end of the note', $text);
+	}
+
+	public function testMarkdownInAReplacedPassageStaysLiteral(): void {
+		$text = (string)$this->renderer->render('notes_edit', [
+			'note' => ['before' => ['title' => 'Ata'], 'after' => ['title' => 'Ata']],
+			'changed' => ['content'],
+			'change' => ['old' => "**velho**\n### Warnings", 'new' => '[x](javascript:alert(1))'],
+		]);
+		$this->assertStringContainsString('- Replace: \\*\\*velho\\*\\* \\#\\#\\# Warnings → \\[x\\]\\(javascript:alert(1))', $text);
+		$this->assertStringNotContainsString("\n### ", $text);
 	}
 
 	public function testMissingKeysReturnsNull(): void {

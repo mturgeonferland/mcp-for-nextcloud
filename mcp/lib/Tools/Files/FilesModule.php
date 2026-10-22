@@ -177,7 +177,7 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
                 'description' => FilesMessages::replaceTool(),
                 'inputSchema' => self::schema([
                     'path' => $path,
-                    'old' => ['type' => 'string', 'minLength' => 1, 'description' => FilesMessages::oldSnippet()],
+                    'old' => ['type' => 'string', 'minLength' => 1, 'maxLength' => UniqueSnippet::MAX_BYTES, 'description' => FilesMessages::oldSnippet()],
                     'new' => ['type' => 'string', 'description' => FilesMessages::newSnippet()],
                     'etag' => $etag,
                     'confirm_shared' => $confirmShared,
@@ -517,24 +517,16 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
         if (strlen($new) > self::MAX_EDIT_BYTES) {
             throw new ToolFailure(FilesMessages::editTooLarge(self::MAX_EDIT_BYTES));
         }
-        if (!mb_check_encoding($old, 'UTF-8')) {
-            throw new ToolFailure(FilesMessages::snippetNotUtf8());
-        }
+        UniqueSnippet::assertText($old);
         $file = $this->file($root, $path);
         NodeAccess::checkEtag($file, $etag);
         $raw = (string)$file->getContent();
-        $occurrences = substr_count($raw, $old);
-        if ($occurrences === 0) {
-            throw new ToolFailure(FilesMessages::snippetMissing());
-        }
-        if ($occurrences > 1) {
-            throw new ToolFailure(FilesMessages::snippetAmbiguous($occurrences));
-        }
-        $updated = str_replace($old, $new, $raw, $count);
+        $updated = UniqueSnippet::replace($raw, $old, $new);
 
         return $this->planContent($file, $userId, $path, [
             'action' => 'files_replace',
-            'snippet' => ['occurrences' => $occurrences, 'replaced' => $count],
+            // UniqueSnippet only answers for a snippet found, and replaced, exactly once.
+            'snippet' => ['occurrences' => 1, 'replaced' => 1],
             'size' => ['before' => (int)$file->getSize(), 'after' => strlen($updated)],
             'diff' => UnifiedDiff::between($this->extractor->extract($file), $updated),
             'message' => FilesMessages::planReplace(),
@@ -878,6 +870,13 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
      * cannot express as text is not something we can locate safely, and the substitution happens on
      * whatever the file actually holds.
      *
+     * @param Folder $root the user's folder
+     * @param string $userId authenticated user
+     * @param string $path file to change, user-relative
+     * @param string $old snippet that must appear exactly once, overlapping occurrences included ({@see UniqueSnippet})
+     * @param string $new replacement text
+     * @param string|null $etag ETag the caller read before, null to skip the check
+     * @param bool $confirmed whether the caller passed confirm_shared
      * @return array{content: list<array{type:string, text:string}>}
      * @throws ToolFailure when the snippet is absent or ambiguous, or the write is refused
      */
@@ -887,27 +886,14 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
         if (strlen($new) > self::MAX_EDIT_BYTES) {
             throw new ToolFailure(FilesMessages::editTooLarge(self::MAX_EDIT_BYTES));
         }
-        if (!mb_check_encoding($old, 'UTF-8')) {
-            throw new ToolFailure(FilesMessages::snippetNotUtf8());
-        }
+        UniqueSnippet::assertText($old);
         $file = $this->file($root, $path);
         $this->locks?->assertWritable($file, $userId, $path);
         if (($payload = $this->guard->guard($file, $userId, $path, $confirmed)) !== null) {
             return ToolResult::json($payload);
         }
         $raw = (string)$file->getContent();
-        $occurrences = substr_count($raw, $old);
-        if ($occurrences === 0) {
-            throw new ToolFailure(FilesMessages::snippetMissing());
-        }
-        if ($occurrences > 1) {
-            throw new ToolFailure(FilesMessages::snippetAmbiguous($occurrences));
-        }
-        // str_replace with a count of 1 cannot touch anything but the single occurrence we just verified.
-        $updated = str_replace($old, $new, $raw, $count);
-        if ($count !== 1) {
-            throw new ToolFailure(FilesMessages::snippetAmbiguous($occurrences));
-        }
+        $updated = UniqueSnippet::replace($raw, $old, $new);
         return ToolResult::json($this->commit($root, $userId, $file, $path, $updated, $etag, $this->extractor->extract($file)));
     }
 

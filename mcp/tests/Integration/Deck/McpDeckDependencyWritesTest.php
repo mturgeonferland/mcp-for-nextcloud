@@ -105,7 +105,8 @@ final class McpDeckDependencyWritesTest extends IntegrationTestCase {
 		$r = $this->data($this->call(DeckFixture::EDITOR, $args + ['confirm' => true, 'confirm_shared' => true,
 			'plan_state' => $p['plan_state']]));
 		self::assertTrue($r['confirmed']);
-		self::assertStringContainsString('unreadable cards', $r['message']);
+		self::assertStringContainsString('cards you cannot read', $r['message']);
+		self::assertStringContainsString('those cards', $r['message']);
 		foreach ([false, true] as $remove) {
 			$hidden = $this->call(DeckFixture::EDITOR, ['cardId' => $f['a'], 'targetId' => $f['privateCard']], $remove);
 			$missing = $this->call(DeckFixture::EDITOR, ['cardId' => $f['a'], 'targetId' => 2147483000], $remove);

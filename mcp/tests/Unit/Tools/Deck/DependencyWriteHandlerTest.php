@@ -47,7 +47,8 @@ final class DependencyWriteHandlerTest extends TestCase {
 		self::assertFalse($p['before']);
 		self::assertTrue($p['after']);
 		self::assertSame('origin.dependentCards contains target', $p['direction']);
-		self::assertStringContainsString('unreadable cards', $p['message']);
+		self::assertStringContainsString('cards you cannot read', $p['message']);
+		self::assertStringContainsString('those cards', $p['message']);
 		self::assertStringContainsString('Origin', (new DeckPlanRenderer())->render(ChangeCardDependencyHandler::ADD, $p));
 	}
 

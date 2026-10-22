@@ -18,8 +18,13 @@ use OCA\Mcp\Tools\ArgumentValidator;
 use OCA\Mcp\Tools\Common\NodeAccessInfo;
 use OCA\Mcp\Tools\Common\SharedWriteGuard;
 use OCA\Mcp\Tools\Files\CheckoutService;
+use OCA\Mcp\Tools\Files\ContentCommit;
+use OCA\Mcp\Tools\Files\ContentWritePlan;
 use OCA\Mcp\Tools\Files\FileBackup;
 use OCA\Mcp\Tools\Files\FileCreation;
+use OCA\Mcp\Tools\Files\Handler\EditFileHandler;
+use OCA\Mcp\Tools\Files\Handler\ReplaceFileHandler;
+use OCA\Mcp\Tools\Files\Handler\RestoreVersionHandler;
 use OCA\Mcp\Tools\Files\ImageTools;
 use OCA\Mcp\Tools\Files\MovePlanner;
 use OCA\Mcp\Tools\Files\MoveReport;
@@ -27,6 +32,7 @@ use OCA\Mcp\Tools\Files\Reorganization;
 use OCA\Mcp\Tools\Files\FilesModule;
 use OCA\Mcp\Tools\Files\OcrSupport;
 use OCA\Mcp\Tools\Files\TextExtractor;
+use OCA\Mcp\Tools\Files\VersionRestore;
 use OCA\Mcp\Tools\Files\VersionTools;
 use OCA\Mcp\Tools\ToolFailure;
 use OCA\Mcp\Tools\WriteGate;
@@ -146,6 +152,13 @@ abstract class FilesToolsTestCase extends TestCase {
         $this->locks = new FakeLockManager();
         $locks = $this->locks->service($this);
         $backup = new FileBackup($this->apps, $this->users, $this->time, $config, $this->visibilityGuard, $locks);
+        // Absent key: mode off. The same gate is shared so a later key is visible at every boundary.
+        $gate = AbsentFileTypePolicy::gate($this);
+        $guard = new SharedWriteGuard($access);
+        $commit = new ContentCommit($gate, $access, $locks, $this->visibilityGuard);
+        $plans = new ContentWritePlan($guard, $access, $locks);
+        $versionContainer = $this->createMock(\Psr\Container\ContainerInterface::class);
+        $versionRestore = new VersionRestore($this->apps, $this->users, $gate, $access, $versionContainer, $locks, null);
         $this->previewManager = $this->createMock(IPreview::class);
         $this->tagManager = $this->createMock(ISystemTagManager::class);
         $this->tagMapper = $this->createMock(ISystemTagObjectMapper::class);
@@ -172,9 +185,9 @@ abstract class FilesToolsTestCase extends TestCase {
             $this->users,
             $db,
             $access,
-            new SharedWriteGuard($access),
+            $guard,
             $checkout,
-            new VersionTools($this->apps, $this->users, $extractor, $backup, $access, $this->createMock(\Psr\Container\ContainerInterface::class), new OcrSupport($this->apps), $locks),
+            new VersionTools($this->apps, $this->users, $extractor, $backup, $access, $versionContainer, new OcrSupport($this->apps), $locks, null, $versionRestore),
             new Reorganization($access, new SharedWriteGuard($access), $this->report(), $this->users, $this->visibilityGuard, $locks),
             new MovePlanner(new Reorganization($access, new SharedWriteGuard($access), $this->report(), $this->users, $this->visibilityGuard, $locks), $access, new SharedWriteGuard($access), $this->visibilityGuard),
             $this->batchStore ?? $this->batches,
@@ -186,6 +199,9 @@ abstract class FilesToolsTestCase extends TestCase {
             creation: new FileCreation($access, new SharedWriteGuard($access), $checkout, $this->filenames,
                 $this->visibilityGuard ?? new \OCA\Mcp\Service\Scope\FilesAccessGuard($config, $this->tagMapper, $this->visibilityRoot()), $this->creationLogger, $locks),
             locks: $locks,
+            editFile: new EditFileHandler($extractor, $guard, $plans, $commit, $gate, $locks, $this->visibilityGuard),
+            replaceFile: new ReplaceFileHandler($extractor, $guard, $plans, $commit, $gate, $locks, $this->visibilityGuard),
+            restoreVersion: new RestoreVersionHandler($access, $guard, $gate, $locks, $this->visibilityGuard),
         );
     }
 

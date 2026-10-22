@@ -15,8 +15,14 @@ use OCA\Mcp\Tests\Unit\Tools\FakeUsers;
 use OCA\Mcp\Tools\ArgumentValidator;
 use OCA\Mcp\Tools\Common\NodeAccessInfo;
 use OCA\Mcp\Tools\Common\SharedWriteGuard;
+use OCA\Mcp\Tests\Unit\Tools\Files\AbsentFileTypePolicy;
 use OCA\Mcp\Tools\Files\CheckoutService;
+use OCA\Mcp\Tools\Files\ContentCommit;
+use OCA\Mcp\Tools\Files\ContentWritePlan;
 use OCA\Mcp\Tools\Files\FileBackup;
+use OCA\Mcp\Tools\Files\Handler\EditFileHandler;
+use OCA\Mcp\Tools\Files\Handler\ReplaceFileHandler;
+use OCA\Mcp\Tools\Files\Handler\RestoreVersionHandler;
 use OCA\Mcp\Tools\Files\ImageTools;
 use OCA\Mcp\Tools\Files\BatchStore;
 use OCA\Mcp\Tools\Files\MovePlanner;
@@ -26,6 +32,7 @@ use OCA\Mcp\Tools\Files\FilesMessages;
 use OCA\Mcp\Tools\Files\FilesModule;
 use OCA\Mcp\Tools\Files\OcrSupport;
 use OCA\Mcp\Tools\Files\TextExtractor;
+use OCA\Mcp\Tools\Files\VersionRestore;
 use OCA\Mcp\Tools\Files\VersionTools;
 use OCA\Mcp\Tools\Common\CommonMessages;
 use OCA\Mcp\Tools\ToolFailure;
@@ -73,7 +80,15 @@ final class FilesModuleTest extends TestCase {
         $access = new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager());
         $urls = $this->createMock(IURLGenerator::class);
         $urls->method('linkToRouteAbsolute')->willReturnCallback(fn (string $route, array $args = []) => 'https://cloud.test/apps/mcp/' . ($args['token'] ?? ''));
-        $versions = new VersionTools($apps, $users, new TextExtractor($temp), new FileBackup($apps, $users, $time, $appConfig), $access, $this->createMock(\Psr\Container\ContainerInterface::class), new OcrSupport($apps));
+        $extractor = new TextExtractor($temp);
+        $gate = AbsentFileTypePolicy::gate($this);
+        $shared = new SharedWriteGuard($access);
+        $commit = new ContentCommit($gate, $access);
+        $plans = new ContentWritePlan($shared, $access);
+        $versionContainer = $this->createMock(\Psr\Container\ContainerInterface::class);
+        $versionBackup = new FileBackup($apps, $users, $time, $appConfig);
+        $versions = new VersionTools($apps, $users, $extractor, $versionBackup, $access, $versionContainer, new OcrSupport($apps),
+            versionRestore: new VersionRestore($apps, $users, $gate, $access, $versionContainer));
         $report = new MoveReport($this->createMock(\Psr\Container\ContainerInterface::class), $this->tree->shareManager(), $apps);
         $reorganization = new Reorganization($access, new SharedWriteGuard($access), $report, $users);
         $planner = new MovePlanner($reorganization, $access, new SharedWriteGuard($access));
@@ -89,10 +104,13 @@ final class FilesModuleTest extends TestCase {
             $this->createMock(\Psr\Container\ContainerInterface::class),
             $db,
         );
-        $this->module = new FilesModule($root, new TextExtractor($temp), new FileBackup($apps, $users, $time, $appConfig), $users, $db,
-            $access, new SharedWriteGuard($access),
+        $this->module = new FilesModule($root, $extractor, new FileBackup($apps, $users, $time, $appConfig), $users, $db,
+            $access, $shared,
             new CheckoutService($urls, $appConfig, $time, new TokenHasher($appConfig), $this->createMock(CheckoutTokenStore::class), $apps, $users),
-            $versions, $reorganization, $planner, $store, $time, $imageTools, new OcrSupport($apps));
+            $versions, $reorganization, $planner, $store, $time, $imageTools, new OcrSupport($apps),
+            editFile: new EditFileHandler($extractor, $shared, $plans, $commit, $gate),
+            replaceFile: new ReplaceFileHandler($extractor, $shared, $plans, $commit, $gate),
+            restoreVersion: new RestoreVersionHandler($access, $shared, $gate));
         $this->versions = $versions;
     }
 

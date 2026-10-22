@@ -8,8 +8,10 @@ declare(strict_types=1);
 namespace OCA\Mcp\Tools\Files;
 
 use OCA\Mcp\Tools\Common\LockAwareWrite;
-use OCA\Mcp\Tools\Common\LockWriteFailure;
 use OCA\Mcp\Tools\Common\NodeAccess;
+use OCA\Mcp\Tools\Files\Handler\EditFileHandler;
+use OCA\Mcp\Tools\Files\Handler\ReplaceFileHandler;
+use OCA\Mcp\Tools\Files\Handler\RestoreVersionHandler;
 use OCA\Mcp\Tools\Common\NodeAccessInfo;
 use OCA\Mcp\Tools\Common\PathGuard;
 use OCA\Mcp\Tools\Common\SharedWriteGuard;
@@ -37,7 +39,6 @@ use OCP\FullTextSearch\IFullTextSearchManager;
 use OCP\FullTextSearch\Model\ISearchResult;
 use OCP\IDBConnection;
 use OCP\IUserManager;
-use OCP\Lock\LockedException;
 
 /**
  * Files tools: list, search, tree, mkdir, copy, move, batch, read, protected edit, snippet replace, local
@@ -96,6 +97,9 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
         private ?ShareRemover $shareRemover = null,
         private ?FileCreation $creation = null,
         private ?LockAwareWrite $locks = null,
+        private ?EditFileHandler $editFile = null,
+        private ?ReplaceFileHandler $replaceFile = null,
+        private ?RestoreVersionHandler $restoreVersion = null,
     ) {}
 
     /** @return list<array{name:string, description:string, inputSchema:array<string, mixed>, module:string, operation:string, app?:string}> */
@@ -373,12 +377,12 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
                 $this->time->getTime(),
             )),
             'files_read' => $this->read($root, $userId, $arguments['path']),
-            'files_edit' => $this->write($root, $userId, $arguments['path'], $arguments['content'], $arguments['etag'] ?? null, $confirmed),
-            'files_replace' => $this->replace($root, $userId, $arguments['path'], $arguments['old'], $arguments['new'], $arguments['etag'] ?? null, $confirmed),
+            'files_edit' => $this->editFile()->execute($root, $userId, $arguments['path'], $arguments['content'], $arguments['etag'] ?? null, $confirmed, $this->backup),
+            'files_replace' => $this->replaceFile()->execute($root, $userId, $arguments['path'], $arguments['old'], $arguments['new'], $arguments['etag'] ?? null, $confirmed, $this->backup),
             'files_checkout' => $this->checkoutOut($root, $userId, $arguments['path'], $arguments['etag'] ?? null, $confirmed),
             'files_versions_list' => ToolResult::json($this->versions->list($root, $this->file($root, $arguments['path']), PathGuard::normalize($arguments['path']), $arguments['limit'], $userId)),
             'files_version_read' => ToolResult::json($this->versions->read($this->file($root, $arguments['path']), PathGuard::normalize($arguments['path']), $arguments['version'], $userId)),
-            'files_version_restore' => $this->restore($root, $userId, $arguments['path'], $arguments['version'], $confirmed),
+            'files_version_restore' => $this->restoreVersion()->execute($root, $userId, $arguments['path'], $arguments['version'], $confirmed, $this->versions),
             'files_image_view' => $this->images->view($root, $userId, $arguments['path'], $arguments['max_size']),
             'files_images_view' => $this->images->viewMany($root, $userId, $arguments['paths'] ?? null, $arguments['folder'] ?? null, $arguments['limit'], $arguments['max_size']),
             'files_image_search' => ToolResult::json($this->images->search($root, $userId, $arguments)),
@@ -432,6 +436,21 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
         return $this->creation ?? throw new \LogicException('FileCreation is not wired');
     }
 
+    /** @return EditFileHandler the handler of files_edit, which the container always injects */
+    private function editFile(): EditFileHandler {
+        return $this->editFile ?? throw new \LogicException('EditFileHandler is not wired');
+    }
+
+    /** @return ReplaceFileHandler the handler of files_replace, which the container always injects */
+    private function replaceFile(): ReplaceFileHandler {
+        return $this->replaceFile ?? throw new \LogicException('ReplaceFileHandler is not wired');
+    }
+
+    /** @return RestoreVersionHandler the handler of files_version_restore, which the container always injects */
+    private function restoreVersion(): RestoreVersionHandler {
+        return $this->restoreVersion ?? throw new \LogicException('RestoreVersionHandler is not wired');
+    }
+
     /**
      * {@inheritDoc}
      *
@@ -449,10 +468,10 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
             'files_move' => $this->reorganization->planMove($root, $userId, $arguments['from'], $arguments['to'], $etag),
             'files_move_batch' => $this->reorganization->planBatch($root, $userId, $arguments['moves'], $arguments['mkdirs'] ?? [], $this->planner),
             'files_undo_batch' => $this->reorganization->planUndoBatch($root, $userId, $arguments['batch_id'], $this->batches, $this->time->getTime()),
-            'files_edit' => $this->planWrite($root, $userId, $arguments['path'], $arguments['content'], $etag),
-            'files_replace' => $this->planReplace($root, $userId, $arguments['path'], $arguments['old'], $arguments['new'], $etag),
+            'files_edit' => $this->editFile()->plan($root, $userId, $arguments['path'], $arguments['content'], $etag),
+            'files_replace' => $this->replaceFile()->plan($root, $userId, $arguments['path'], $arguments['old'], $arguments['new'], $etag),
             'files_checkout' => $this->planCheckout($root, $userId, $arguments['path'], $etag),
-            'files_version_restore' => $this->planRestore($root, $userId, $arguments['path'], $arguments['version']),
+            'files_version_restore' => $this->restoreVersion()->plan($root, $userId, $arguments['path'], $arguments['version'], $this->versions, $this->timezone),
             'files_share' => $this->shareWriter()->plan($root, $userId, $arguments),
             'files_unshare' => $this->shareRemover()->plan($root, $userId, $arguments),
             'files_upload' => $this->creation()->planUpload($root, $userId, $arguments['path'], $arguments['size'] ?? null),
@@ -468,94 +487,6 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
      */
     public function renderPlan(string $tool, array $plan): ?string {
         return FilesPlanRenderer::render($tool, $plan);
-    }
-
-    /**
-     * The plan of `files_edit`: the diff the write would produce and the backup it would take first.
-     *
-     * @param Folder $root the user's folder
-     * @param string $userId authenticated user
-     * @param string $path file to overwrite, user-relative
-     * @param string $content new complete content
-     * @param string|null $etag ETag the caller read before, null to skip the check
-     * @return array<string, mixed>
-     * @throws ToolFailure for a non-text file, an oversized content, a stale ETag or a denied write
-     */
-    private function planWrite(Folder $root, string $userId, string $path, string $content, ?string $etag): array {
-        $path = PathGuard::normalize($path);
-        $this->assertEditable($root, $path);
-        if (strlen($content) > self::MAX_EDIT_BYTES) {
-            throw new ToolFailure(FilesMessages::editTooLarge(self::MAX_EDIT_BYTES));
-        }
-        $file = $this->file($root, $path);
-        NodeAccess::checkEtag($file, $etag);
-        $diff = UnifiedDiff::between($this->extractor->extract($file), $content);
-
-        return $this->planContent($file, $userId, $path, [
-            'action' => 'files_edit',
-            'size' => ['before' => (int)$file->getSize(), 'after' => strlen($content)],
-            'diff' => $diff,
-            'message' => FilesMessages::planEdit(),
-        ]);
-    }
-
-    /**
-     * The plan of `files_replace`: the same diff, from the same snippet check the write performs.
-     *
-     * @param Folder $root the user's folder
-     * @param string $userId authenticated user
-     * @param string $path file to overwrite, user-relative
-     * @param string $old snippet that must appear exactly once
-     * @param string $new replacement text
-     * @param string|null $etag ETag the caller read before, null to skip the check
-     * @return array<string, mixed>
-     * @throws ToolFailure when the file is over the read ceiling, the snippet is absent or ambiguous, or the write would be refused
-     */
-    private function planReplace(Folder $root, string $userId, string $path, string $old, string $new, ?string $etag): array {
-        $path = PathGuard::normalize($path);
-        $this->assertEditable($root, $path);
-        if (strlen($new) > self::MAX_EDIT_BYTES) {
-            throw new ToolFailure(FilesMessages::editTooLarge(self::MAX_EDIT_BYTES));
-        }
-        UniqueSnippet::assertText($old);
-        $file = $this->file($root, $path);
-        NodeAccess::checkEtag($file, $etag);
-        $raw = ReplaceSource::read($file);
-        $updated = UniqueSnippet::replace($raw, $old, $new);
-
-        return $this->planContent($file, $userId, $path, [
-            'action' => 'files_replace',
-            // UniqueSnippet only answers for a snippet found, and replaced, exactly once.
-            'snippet' => ['occurrences' => 1, 'replaced' => 1],
-            'size' => ['before' => (int)$file->getSize(), 'after' => strlen($updated)],
-            'diff' => UnifiedDiff::between($this->extractor->extract($file), $updated),
-            'message' => FilesMessages::planReplace(),
-        ]);
-    }
-
-    /**
-     * The fields every content write shares: who owns the file, whether other people are reached and the
-     * backup the write takes before it writes.
-     *
-     * @param File $file file about to be overwritten
-     * @param string $userId authenticated user
-     * @param string $path normalized user-relative path of $file
-     * @param array<string, mixed> $plan what the specific tool would do
-     * @return array<string, mixed>
-     * @throws ToolFailure when Nextcloud refuses the update, with or without the shared confirmation
-     */
-    private function planContent(File $file, string $userId, string $path, array $plan): array {
-        $shared = $this->guard->guard($file, $userId, $path, false);
-        return $plan + [
-            'path' => $path,
-            'etag' => (string)$file->getEtag(),
-            'backup' => '/' . self::BACKUP_FOLDER,
-            'access' => $this->accessInfo->describe($file, $userId),
-            'shared' => $shared === null ? [] : [$shared],
-            'requiresSharedConfirmation' => $shared !== null,
-            'recoverable' => true,
-            'consequence' => FilesMessages::planBackupConsequence(),
-        ] + $this->lockNotice($file, $userId, $path);
     }
 
     /**
@@ -596,39 +527,6 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
             'consequence' => FilesMessages::planCheckoutConsequence(),
             'message' => FilesMessages::planCheckout(),
         ] + $this->lockNotice($file, $userId, $path, false);
-    }
-
-    /**
-     * The plan of `files_version_restore`: the version that would come back and the backup taken first.
-     *
-     * @param Folder $root the user's folder
-     * @param string $userId authenticated user
-     * @param string $path file to roll back, user-relative
-     * @param string $version version identifier
-     * @return array<string, mixed>
-     * @throws ToolFailure when versioning is off, the version is gone, the path is a backup or the write is denied
-     */
-    private function planRestore(Folder $root, string $userId, string $path, string $version): array {
-        $path = PathGuard::normalize($path);
-        if (FileBackup::isBackupPath($path)) {
-            throw new ToolFailure(FilesMessages::backupPath());
-        }
-        $file = $this->file($root, $path);
-        $shared = $this->guard->guard($file, $userId, $path, false);
-        return [
-            'action' => 'files_version_restore',
-            'path' => $path,
-            'version' => $this->versions->describe($file, $version, $userId),
-            'timezone' => $this->timezone?->forUser($userId)->getName(),
-            'current' => ['etag' => (string)$file->getEtag(), 'size' => (int)$file->getSize()],
-            'backup' => '/' . self::BACKUP_FOLDER,
-            'access' => $this->accessInfo->describe($file, $userId),
-            'shared' => $shared === null ? [] : [$shared],
-            'requiresSharedConfirmation' => $shared !== null,
-            'recoverable' => true,
-            'consequence' => FilesMessages::planBackupConsequence(),
-            'message' => FilesMessages::planRestore(),
-        ] + $this->lockNotice($file, $userId, $path);
     }
 
     /** @return list<array{name:string, path:string, isDir:bool, size:int, mtime:string, contentType:string, access:array<string, mixed>}> */
@@ -844,60 +742,6 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
     }
 
     /**
-     * @return array{content: list<array{type:string, text:string}>}
-     * @throws ToolFailure for a non-text file, an oversized content or a failed write
-     */
-    private function write(Folder $root, string $userId, string $path, string $content, ?string $etag, bool $confirmed): array {
-        $path = PathGuard::normalize($path);
-        $this->assertEditable($root, $path);
-        if (strlen($content) > self::MAX_EDIT_BYTES) {
-            throw new ToolFailure(FilesMessages::editTooLarge(self::MAX_EDIT_BYTES));
-        }
-        $file = $this->file($root, $path);
-        $this->locks?->assertWritable($file, $userId, $path);
-        if (($payload = $this->guard->guard($file, $userId, $path, $confirmed)) !== null) {
-            return ToolResult::json($payload);
-        }
-        return ToolResult::json($this->commit($root, $userId, $file, $path, $content, $etag, $this->extractor->extract($file)));
-    }
-
-    /**
-     * Replaces one snippet, counting and substituting over the RAW bytes.
-     *
-     * The extracted text is only for the diff: it went through mb_scrub, which drops a BOM and turns every
-     * byte of a Latin-1 file into "?", so writing it back would silently corrupt the whole file when the
-     * snippet touches one line. `old` therefore has to be valid UTF-8, because a byte sequence the client
-     * cannot express as text is not something we can locate safely, and the substitution happens on
-     * whatever the file actually holds.
-     *
-     * @param Folder $root the user's folder
-     * @param string $userId authenticated user
-     * @param string $path file to change, user-relative
-     * @param string $old snippet that must appear exactly once, overlapping occurrences included ({@see UniqueSnippet})
-     * @param string $new replacement text
-     * @param string|null $etag ETag the caller read before, null to skip the check
-     * @param bool $confirmed whether the caller passed confirm_shared
-     * @return array{content: list<array{type:string, text:string}>}
-     * @throws ToolFailure when the file is over the read ceiling, the snippet is absent or ambiguous, or the write is refused
-     */
-    private function replace(Folder $root, string $userId, string $path, string $old, string $new, ?string $etag, bool $confirmed): array {
-        $path = PathGuard::normalize($path);
-        $this->assertEditable($root, $path);
-        if (strlen($new) > self::MAX_EDIT_BYTES) {
-            throw new ToolFailure(FilesMessages::editTooLarge(self::MAX_EDIT_BYTES));
-        }
-        UniqueSnippet::assertText($old);
-        $file = $this->file($root, $path);
-        $this->locks?->assertWritable($file, $userId, $path);
-        if (($payload = $this->guard->guard($file, $userId, $path, $confirmed)) !== null) {
-            return ToolResult::json($payload);
-        }
-        $raw = ReplaceSource::read($file);
-        $updated = UniqueSnippet::replace($raw, $old, $new);
-        return ToolResult::json($this->commit($root, $userId, $file, $path, $updated, $etag, $this->extractor->extract($file)));
-    }
-
-    /**
      * Issues the links for any file type: the bytes travel between the client and the controller only.
      *
      * @param Folder $root the user's folder
@@ -921,66 +765,6 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
             return ToolResult::json($payload);
         }
         return ToolResult::json($this->checkout->issue($userId, $file, $path, $access, $confirmed));
-    }
-
-    /**
-     * The backup folder is refused here for the same reason files_edit refuses it: a restore would roll a
-     * backup copy back and then take another backup of that backup, growing the folder on every attempt and
-     * editing the very folder a user recovers from.
-     *
-     * @return array{content: list<array{type:string, text:string}>}
-     * @throws ToolFailure when the write is refused or the rollback fails
-     */
-    private function restore(Folder $root, string $userId, string $path, string $version, bool $confirmed): array {
-        $path = PathGuard::normalize($path);
-        if (FileBackup::isBackupPath($path)) {
-            throw new ToolFailure(FilesMessages::backupPath());
-        }
-        $file = $this->file($root, $path);
-        $this->locks?->assertWritable($file, $userId, $path);
-        if (($payload = $this->guard->guard($file, $userId, $path, $confirmed)) !== null) {
-            return ToolResult::json($payload);
-        }
-        return ToolResult::json($this->versions->restore($root, $file, $path, $version, $userId));
-    }
-
-    /**
-     * Backup, write and report: the single place where content actually reaches the file, so files_edit,
-     * files_replace and the upload route all get the same preparation.
-     *
-     * @param Folder $root the user's folder
-     * @param string $userId authenticated user
-     * @param File $file file about to be overwritten
-     * @param string $path normalized user-relative path of $file
-     * @param string $content new content
-     * @param string|null $etag ETag the caller read before, null to skip the check
-     * @param string $before content as read, for the diff
-     * @return array{path:string, size:int, etag:string, access:array<string, mixed>, backup:string, diff:string}
-     * @throws ToolFailure when the preparation or the write fails
-     */
-    private function commit(Folder $root, string $userId, File $file, string $path, string $content, ?string $etag, string $before): array {
-        $copy = $this->backup->prepare($root, $file, $path, $userId, $etag);
-        $this->visibilityGuard?->assertVisible($file);
-        try {
-            // Checked again right before the write: the backup took time, and files_lock does not refuse every lock.
-            NodeAccess::mutate(fn () => $this->locks === null ? $file->putContent($content) : $this->locks->run(fn () => $file->putContent($content), $file, $userId, $path), $this->visibilityGuard);
-        } catch (LockWriteFailure $e) {
-            throw $e->withNote(FilesMessages::originalKept($copy));
-        } catch (LockedException $e) {
-            $failure = NodeAccess::lockFailure($e);
-            throw $failure instanceof LockWriteFailure ? $failure->withNote(FilesMessages::originalKept($copy)) : new ToolFailure(FilesMessages::writeFailed($copy));
-        } catch (\Throwable) {
-            throw new ToolFailure(FilesMessages::writeFailed($copy));
-        }
-        $node = NodeAccess::requireFile(NodeAccess::get($root, $path, $this->visibilityGuard));
-        return [
-            'path' => $path,
-            'size' => strlen($content),
-            'etag' => (string)$node->getEtag(),
-            'access' => $this->accessInfo->describe($node, $userId),
-            'backup' => $copy,
-            'diff' => UnifiedDiff::between($before, $content),
-        ];
     }
 
     /**
@@ -1047,20 +831,6 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
     private function assertNotBackup(string $path): void {
         if (FileBackup::isBackupPath($path)) {
             throw new ToolFailure(FilesMessages::backupPath());
-        }
-    }
-
-    /**
-     * files_edit and files_replace write text through the model, so they also need a text file.
-     *
-     * @param Folder $root the user's folder
-     * @param string $path normalized user-relative path
-     * @throws ToolFailure when the path is the backup folder or does not hold editable text
-     */
-    private function assertEditable(Folder $root, string $path): void {
-        $this->assertNotBackup($path);
-        if (!TextExtractor::isText($this->file($root, $path))) {
-            throw new ToolFailure(FilesMessages::notText());
         }
     }
 

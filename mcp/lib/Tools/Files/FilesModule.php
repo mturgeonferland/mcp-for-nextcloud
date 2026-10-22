@@ -734,17 +734,6 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
     }
 
     /**
-     * @param Node $node the file a plan would change
-     * @param string $userId authenticated user
-     * @param string $path its user-relative path
-     * @param bool $asUser false for the plan of a checkout, whose upload runs without the user's session
-     * @return array<string, mixed> the lock and its warning for the plan, nothing for a free file
-     */
-    private function lockNotice(Node $node, string $userId, string $path, bool $asUser = true): array {
-        return $this->locks?->planNotice($node, $userId, $path, $asUser) ?? [];
-    }
-
-    /**
      * @param Folder $root the user's folder
      * @param string $userId authenticated user
      * @param Node $node entry to describe
@@ -785,19 +774,6 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
      */
     private function file(Folder $root, string $path): File {
         return NodeAccess::requireFile(NodeAccess::get($root, $path, $this->visibilityGuard));
-    }
-
-    /**
-     * The only refusal files_checkout shares with an edit: the folder a user recovers from is never written.
-     * The checkout never reads the bytes, so its type does not matter; the upload limit lives in CheckoutService.
-     *
-     * @param string $path normalized user-relative path
-     * @throws ToolFailure when the path is inside the backup folder
-     */
-    private function assertNotBackup(string $path): void {
-        if (FileBackup::isBackupPath($path)) {
-            throw new ToolFailure(FilesMessages::backupPath());
-        }
     }
 
     /**

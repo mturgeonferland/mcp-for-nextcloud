@@ -9,6 +9,7 @@ namespace OCA\Mcp\Tests\Integration\Files;
 
 use OCA\Mcp\Service\FileWritePolicy;
 use OCA\Mcp\Tests\Integration\Exclusion\ExclusionTestCase;
+use OCA\Mcp\Tools\Common\FileTypeMessages;
 use OCA\Mcp\Tools\Files\{Batch, BatchStore};
 use OCP\IAppConfig;
 use OCP\Server;
@@ -47,8 +48,11 @@ final class TreeBatchPolicyHttpTest extends ExclusionTestCase {
 		]];
 		$plan = $client->tool('files_move_batch', $args);
 		self::assertTrue($plan->ok(), $plan->describe());
-		self::assertFalse($plan->json()['ok']);
-		self::assertNotEmpty($plan->json()['denied']);
+		self::assertFalse($plan->structured()['ok'], $plan->raw);
+		self::assertContains(['from' => $this->path('home', 'a.txt'), 'to' => $parent . '/stage.php',
+			'reason' => FileTypeMessages::denied()], $plan->structured()['denied']);
+		self::assertFalse($this->exists(self::ALICE, $parent));
+		self::assertSame('alpha', $this->node(self::ALICE, $this->path('home', 'a.txt'))->getContent());
 		$reply = $client->write('files_move_batch', $args);
 		self::assertTrue($reply->isError(), $reply->describe());
 		self::assertFalse($this->exists(self::ALICE, $parent));
@@ -69,7 +73,11 @@ final class TreeBatchPolicyHttpTest extends ExclusionTestCase {
 		$client = $this->mcp(self::ALICE, 'bearer');
 		$plan = $client->tool('files_undo_batch', ['batch_id' => $id]);
 		self::assertTrue($plan->ok(), $plan->describe());
-		self::assertFalse($plan->json()['ok']);
+		self::assertFalse($plan->structured()['ok'], $plan->raw);
+		self::assertContains(FileTypeMessages::denied(), array_column($plan->structured()['conflicts'], 'reason'));
+		self::assertSame($before, $store->find($id, self::ALICE)->toRow());
+		self::assertFalse($this->exists(self::ALICE, $parent));
+		self::assertSame('alpha', $this->node(self::ALICE, $this->path('home', 'a.txt'))->getContent());
 		$reply = $client->write('files_undo_batch', ['batch_id' => $id]);
 		self::assertTrue($reply->ok(), $reply->describe());
 		self::assertSame(0, $reply->json()['undone']);

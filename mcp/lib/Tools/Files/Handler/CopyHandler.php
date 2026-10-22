@@ -37,7 +37,7 @@ final class CopyHandler {
 	 * @param string $to destination path, user-relative
 	 * @param string|null $etag ETag the caller read before, null to skip the check
 	 * @param bool $confirmedShared whether the caller passed confirm_shared
-	 * @return array{from:string, to:string, idBefore:int, idAfter:int|null, nodes:int, bytes:int, access:array<string, mixed>|null, partial:bool, created:list<string>, conflicts:list<array{path:string,reason:string}>, not_copied:list<string>}|array<string, mixed>
+	 * @return array{from:string, to:string, idBefore:int, idAfter:int|null, nodes:int, bytes:int, access:array<string, mixed>|null, partial?:bool, created?:list<string>, conflicts?:list<array{path:string,reason:string}>, not_copied?:list<string>}|array<string, mixed>
 	 *   the receipt, or the shared-write confirmation instead of a receipt when one is still missing
 	 * @throws \InvalidArgumentException for a path with traversal or control characters
 	 * @throws ToolFailure for an occupied destination, a stale ETag, a ceiling or a denied write
@@ -60,7 +60,7 @@ final class CopyHandler {
 		$result = (new ListedTreeCopy($this->context))->execute($root, $userId, $source, $to, $manifest);
 		$copy = $result['node'];
 
-		return [
+		$out = [
 			'from' => $receipt,
 			'to' => $to,
 			'idBefore' => (int)$source->getId(),
@@ -68,11 +68,17 @@ final class CopyHandler {
 			'nodes' => $measured['nodes'],
 			'bytes' => $measured['bytes'],
 			'access' => $copy === null ? null : $this->context->access->describe($copy, $userId),
-			'partial' => $result['partial'],
-			'created' => $result['created'],
-			'conflicts' => $result['conflicts'],
-			'not_copied' => $result['not_copied'],
 		];
+		// D10/B4 adds a partial receipt only for a folder copied from the validated list.
+		if ($result['listed']) {
+			$out += [
+				'partial' => $result['partial'],
+				'created' => $result['created'],
+				'conflicts' => $result['conflicts'],
+				'not_copied' => $result['not_copied'],
+			];
+		}
+		return $out;
 	}
 
 	/**

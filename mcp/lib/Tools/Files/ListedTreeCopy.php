@@ -27,12 +27,12 @@ final class ListedTreeCopy {
 	 * @param Node $source Existing source.
 	 * @param string $to Normalized target.
 	 * @param array<string,mixed>|null $manifest Whole preflight result, or off.
-	 * @return array{node:Node|null,partial:bool,created:list<string>,conflicts:list<array{path:string,reason:string}>,not_copied:list<string>} Explicit complete/partial receipt.
+	 * @return array{node:Node|null,listed:bool,partial:bool,created:list<string>,conflicts:list<array{path:string,reason:string}>,not_copied:list<string>} Explicit complete/partial receipt.
 	 */
 	public function execute(Folder $root, string $userId, Node $source, string $to, ?array $manifest): array {
 		if (!$source instanceof Folder) {
 			$node = $this->native($root, $source, $this->context->absolute($root, $to), $userId, $to);
-			return ['node' => $node, 'partial' => false, 'created' => [$to], 'conflicts' => [], 'not_copied' => []];
+			return ['node' => $node, 'listed' => false, 'partial' => false, 'created' => [$to], 'conflicts' => [], 'not_copied' => []];
 		}
 		$snapshot = $this->context->policy()->snapshot();
 		if ($manifest === null && $snapshot->isActive()) {
@@ -40,7 +40,7 @@ final class ListedTreeCopy {
 		}
 		if ($manifest === null) {
 			$node = $this->native($root, $source, $this->context->absolute($root, $to), $userId, $to);
-			return ['node' => $node, 'partial' => false, 'created' => [$to], 'conflicts' => [], 'not_copied' => []];
+			return ['node' => $node, 'listed' => false, 'partial' => false, 'created' => [$to], 'conflicts' => [], 'not_copied' => []];
 		}
 		// Fresh complete check before the first effect, using only names from the original list.
 		foreach ($manifest['entries'] as $entry) {
@@ -96,7 +96,7 @@ final class ListedTreeCopy {
 				}
 			}
 		}
-		return ['node' => $copiedRoot, 'partial' => $conflicts !== [], 'created' => $created, 'conflicts' => $conflicts, 'not_copied' => $missing];
+		return ['node' => $copiedRoot, 'listed' => true, 'partial' => $conflicts !== [], 'created' => $created, 'conflicts' => $conflicts, 'not_copied' => $missing];
 	}
 
 	/**
@@ -122,7 +122,8 @@ final class ListedTreeCopy {
 		if ($relative === null) {
 			throw new MoveConflict(FilesMessages::notTheBatchNode());
 		}
-		$node = NodeAccess::get($root, $relative, $this->context->visibilityGuard);
+		// A listed source that disappeared is an item conflict, not an unexpected global failure.
+		$node = NodeAccess::run(fn () => NodeAccess::get($root, $relative, $this->context->visibilityGuard));
 		if ($node->getPath() !== $entry['source'] || (int)$node->getId() !== $entry['id'] || ($node instanceof Folder) !== $entry['folder']) {
 			throw new MoveConflict(FilesMessages::notTheBatchNode());
 		}

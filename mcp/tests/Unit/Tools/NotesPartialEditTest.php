@@ -520,7 +520,7 @@ final class NotesPartialEditTest extends TestCase {
 		$this->assertSame("# Chamados\n- 101 aberto\n- 102 aberto\n", $content);
 		// Another client writes between the first check and the write, and Nextcloud keeps the etag.
 		$this->tree->nodes[self::PATH]['content'] = "# Chamados\n- 101 fechado\n";
-		$write = $confirmation->writer($folder, 'alice', $note, $arguments, 'append', $content);
+		$write = $confirmation->writer($folder, 'alice', $note, $arguments, 'append', $content, [$note->getName()]);
 		$this->changedPlan($write);
 		$this->assertSame("# Chamados\n- 101 fechado\n", $this->content());
 	}

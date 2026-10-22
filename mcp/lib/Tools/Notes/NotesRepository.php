@@ -273,7 +273,7 @@ class NotesRepository {
     }
 
     /** @throws InvalidArgumentException when nothing usable is left after sanitizing */
-    private static function title(string $title): string {
+    public static function title(string $title): string {
         $clean = trim((string)preg_replace('/[\/\\\\\x00-\x1F\x7F]+/', ' ', $title), " .\t");
         if ($clean === '') {
             throw new InvalidArgumentException('Invalid argument: title');

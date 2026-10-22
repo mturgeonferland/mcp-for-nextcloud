@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Mcp\Tools\Notes;
 
 use OCA\Mcp\Tools\ArgumentValidationException;
+use OCA\Mcp\Tools\Common\FileTypeGuard;
 use OCA\Mcp\Tools\Common\LockAwareWrite;
 use OCA\Mcp\Tools\Common\NodeAccessInfo;
 use OCA\Mcp\Tools\PlanChanged;
@@ -34,14 +35,16 @@ final class NoteChangeConfirmation {
 	 * @param NodeAccessInfo $accessInfo who owns the note, for the new plan
 	 * @param PlanState $states the instance's plan states
 	 * @param LockAwareWrite|null $locks the files_lock check, for the new plan
+	 * @param FileTypeGuard|null $types file-name policy checked again beside the write; null only outside production
 	 */
 	public function __construct(
 		private NotesRepository $notes,
 		NodeAccessInfo $accessInfo,
 		private PlanState $states,
 		?LockAwareWrite $locks = null,
+		private ?FileTypeGuard $types = null,
 	) {
-		$this->preview = new NoteChangePreview($notes, $accessInfo, $states, $locks);
+		$this->preview = new NoteChangePreview($notes, $accessInfo, $states, $locks, $types);
 	}
 
 	/**
@@ -73,14 +76,20 @@ final class NoteChangeConfirmation {
 	 * @param array<string, mixed> $arguments validated notes_edit arguments
 	 * @param string $mode NoteChange::APPEND or NoteChange::REPLACE
 	 * @param string $content what {@see self::content()} returned
+	 * @param list<string> $basenames current name and, when the title changes, the final basename; one snapshot covers
+	 *   the set after the recheck and before the bytes are stored
 	 * @return \Closure():void the write; it throws {@see PlanChanged} when the note is no longer the approved one, and
 	 *   then nothing is written
 	 */
-	public function writer(?Folder $root, string $userId, File $note, array $arguments, string $mode, string $content): \Closure {
-		return function () use ($root, $userId, $note, $arguments, $mode, $content): void {
-			$this->assertApproved($root, $userId, $note, $this->notes->raw($note), $arguments, $mode);
-			$note->putContent($content);
-		};
+	public function writer(?Folder $root, string $userId, File $note, array $arguments, string $mode, string $content, array $basenames): \Closure {
+		return (new NoteContentSink($this->types))->partial(
+			$note,
+			$content,
+			function () use ($root, $userId, $note, $arguments, $mode): void {
+				$this->assertApproved($root, $userId, $note, $this->notes->raw($note), $arguments, $mode);
+			},
+			$basenames,
+		);
 	}
 
 	/**

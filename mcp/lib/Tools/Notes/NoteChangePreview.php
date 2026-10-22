@@ -7,7 +7,10 @@ declare(strict_types=1);
 
 namespace OCA\Mcp\Tools\Notes;
 
+use OCA\Mcp\Service\FileWritePolicyUnavailable;
 use OCA\Mcp\Tools\Common\CommonMessages;
+use OCA\Mcp\Tools\Common\FileTypeDenied;
+use OCA\Mcp\Tools\Common\FileTypeGuard;
 use OCA\Mcp\Tools\Common\LockAwareWrite;
 use OCA\Mcp\Tools\Common\NodeAccessInfo;
 use OCA\Mcp\Tools\PlanState;
@@ -25,12 +28,14 @@ final class NoteChangePreview {
 	 * @param NodeAccessInfo $accessInfo who owns the note and who else it reaches
 	 * @param PlanState $states the instance's plan states
 	 * @param LockAwareWrite|null $locks the files_lock check, null when the app is not there
+	 * @param FileTypeGuard|null $types file-name policy for this plan; null only outside production
 	 */
 	public function __construct(
 		private NotesRepository $notes,
 		private NodeAccessInfo $accessInfo,
 		private PlanState $states,
 		private ?LockAwareWrite $locks = null,
+		private ?FileTypeGuard $types = null,
 	) {
 	}
 
@@ -43,6 +48,8 @@ final class NoteChangePreview {
 	 * @return array<string, mixed> the plan
 	 * @throws ToolFailure when the note is missing, read-only or stale, the passage is absent or not unique, the result is
 	 *   over the limit or the new title is refused
+	 * @throws FileTypeDenied when the active policy refuses the current name or the renamed basename
+	 * @throws FileWritePolicyUnavailable when the policy cannot be read
 	 */
 	public function plan(?Folder $root, string $userId, array $arguments, string $mode, bool $changed = false): array {
 		$note = $this->notes->find($root, $arguments['id']);
@@ -53,6 +60,14 @@ final class NoteChangePreview {
 		$current = $this->notes->raw($note);
 		$updated = NoteChange::apply($mode, $current, $arguments);
 		$title = (new NoteChangeTitle($this->notes))->after($note, isset($arguments['title']) ? (string)$arguments['title'] : null);
+		$names = [$note->getName()];
+		if (isset($arguments['title'])) {
+			$renamed = (new NoteChangeTitle($this->notes))->target($note, (string)$arguments['title']);
+			if ($renamed !== null) {
+				$names[] = NoteNames::leaf($renamed);
+			}
+		}
+		(new NoteTypeBoundary($this->types))->assertProjected($names);
 		$access = $this->accessInfo->describe($note, $userId);
 		$lock = $this->locks?->planNotice($note, $userId) ?? [];
 		$warnings = array_merge($changed ? [['message' => NotesMessages::notePlanChanged()]] : [], $lock['warnings'] ?? []);

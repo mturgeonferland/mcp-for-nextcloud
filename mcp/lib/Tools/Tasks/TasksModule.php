@@ -23,6 +23,7 @@ use OCA\Mcp\Tools\Common\OutputReferenceFilter;
 use OCA\Mcp\Tools\Dav\CollectionSchema as Schema;
 use OCA\Mcp\Tools\PreviewsWrites;
 use OCA\Mcp\Tools\RendersPlans;
+use OCA\Mcp\Tools\Tasks\Handler\ListTasksHandler;
 use OCA\Mcp\Tools\ToolFailure;
 use OCA\Mcp\Tools\ToolGuideNotes;
 use OCA\Mcp\Tools\ToolModule;
@@ -121,7 +122,8 @@ final class TasksModule implements ToolModule, PreviewsWrites, ToolGuideNotes, R
                         'description' => 'Include completed tasks.',
                     ],
                     'category' => Schema::text(
-                        'Only list tasks with this category, compared exactly but ignoring case.',
+                        'Only list tasks with this category, compared exactly but ignoring case. '
+                            . 'Omit the field to apply no category filter; the value is not a pattern.',
                         1,
                         TaskData::MAX_CATEGORY_LENGTH
                     ),
@@ -243,53 +245,15 @@ final class TasksModule implements ToolModule, PreviewsWrites, ToolGuideNotes, R
                 array_map(static fn ($calendar) => (array) $calendar, $this->access->visible($userId, 'VTODO'))
             );
         }
-        if ($name === 'tasks_list_tasks' || $name === 'tasks_read_task') {
+        if ($name === 'tasks_list_tasks') {
+            return (new ListTasksHandler($this->access, $this->store, $this->tasks, $this->data, new TaskRowReader($this->data)))->handle($arguments, $userId);
+        }
+        if ($name === 'tasks_read_task') {
             $calendar = $this->access->resolve($userId, $arguments['calendar'], 'VTODO');
-            if ($name === 'tasks_read_task') {
-                $row = $this->row($calendar->id, $arguments['uid']);
-                $parsed = $this->readable($row, $calendar->ownedByOther($userId));
-                return ToolResult::json(
-                    $this->output($userId, $parsed) + ['etag' => $row['etag'], 'calendar' => $calendar->path]
-                );
-            }
-            $items = [];
-            $more = false;
-            $limit = $arguments['limit'] ?? 50;
-            $offset = $arguments['offset'] ?? 0;
-            $matched = 0;
-            // Fetch objects in small chunks, retaining the CalDAV query's live-object scope.
-            foreach (array_chunk($this->tasks->uris($calendar->id), 100) as $uris) {
-                foreach ($this->store->objects($calendar->id, $uris) as $row) {
-                    try {
-                        $parsed = $this->readable($row, $calendar->ownedByOther($userId));
-                        $item = $this->data->item($parsed);
-                    } catch (ToolFailure) {
-                        continue;
-                    }
-                    if (!($arguments['include_completed'] ?? false) && $item['status'] === 'COMPLETED') {
-                        continue;
-                    }
-                    // Filter before counting the offset, so pages are taken from the matching tasks only.
-                    if (isset($arguments['category']) && !$this->data->hasCategory($item, $arguments['category'])) {
-                        continue;
-                    }
-                    if ($matched++ < $offset) {
-                        continue;
-                    }
-                    if (count($items) >= $limit) {
-                        $more = true;
-                        break 2;
-                    }
-                    unset($item['icalendar']);
-                    $items[] = $item + ['etag' => $row['etag'], 'calendar' => $calendar->path];
-                }
-            }
+            $row = $this->row($calendar->id, $arguments['uid']);
+            $parsed = $this->readable($row, $calendar->ownedByOther($userId));
             return ToolResult::json(
-                [
-                    'tasks' => $items,
-                    'hasMore' => $more,
-                    'nextOffset' => $more ? $offset + count($items) : null,
-                ]
+                $this->output($userId, $parsed) + ['etag' => $row['etag'], 'calendar' => $calendar->path]
             );
         }
         $prepared = $this->prepare($name, $arguments, $userId);
@@ -444,13 +408,6 @@ final class TasksModule implements ToolModule, PreviewsWrites, ToolGuideNotes, R
      * @throws ToolFailure when the object is trashed, malformed or protected in a share
      */
     private function readable(array $row, bool $shared): VCalendar {
-        if ($row['deleted']) {
-            throw new ToolFailure(CommonMessages::notFound());
-        }
-        $parsed = $this->data->parse($row['data']);
-        if (!$this->data->visible($parsed, $shared)) {
-            throw new ToolFailure(CommonMessages::notFound());
-        }
-        return $parsed;
+        return (new TaskRowReader($this->data))->readable($row, $shared);
     }
 }

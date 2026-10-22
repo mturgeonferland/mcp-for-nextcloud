@@ -7,78 +7,14 @@ declare(strict_types=1);
 
 namespace OCA\Mcp\Tests\Unit\Tools\Tasks;
 
-use DateTimeImmutable;
 use InvalidArgumentException;
-use OCA\Mcp\Tests\Unit\Tools\Calendar\ScopeStub;
-use OCA\Mcp\Tools\Calendar\CalendarDav;
-use OCA\Mcp\Tools\Calendar\CalendarStore;
+use OCA\Mcp\Tests\Unit\Tools\Tasks\Handler\TaskListingCase;
 use OCA\Mcp\Tools\Calendar\DavResult;
-use OCA\Mcp\Tools\Calendar\SharedGuard;
-use OCA\Mcp\Tools\Calendar\TrashPolicy;
-use OCA\Mcp\Tools\Tasks\TaskData;
-use OCA\Mcp\Tools\Tasks\TaskStore;
-use OCA\Mcp\Tools\Tasks\TasksModule;
 use OCA\Mcp\Tools\ToolFailure;
-use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\IConfig;
-use OCP\IUserManager;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
 
 /** Verifies reading, writing and filtering task categories (VTODO CATEGORIES) without widening visibility. */
-final class TaskCategoriesTest extends TestCase {
-    private const PATH = '/remote.php/dav/calendars/alice/tasks/';
-
-    /** @var array<string, string> serialized task by UID, in calendar order */
-    private array $tasks = [];
-    private string $owner = 'principals/users/alice';
-    private CalendarDav $dav;
-    private TasksModule $module;
-
-    protected function setUp(): void {
-        $this->tasks = ['t1' => $this->task('t1', 'Work')];
-        $store = $this->createMock(CalendarStore::class);
-        $store->method('calendarsForPrincipal')->willReturnCallback(
-            fn () => [
-                [
-                    'id' => 1,
-                    'uri' => 'tasks',
-                    'displayName' => 'Tasks',
-                    'ownerPrincipal' => $this->owner,
-                    'readOnly' => false,
-                    'components' => ['VTODO'],
-                    'deleted' => false,
-                ],
-            ]
-        );
-        $row = fn (string $uid) => isset($this->tasks[$uid])
-            ? ['id' => 1, 'uri' => $uid . '.ics', 'etag' => '"v1"', 'data' => $this->tasks[$uid], 'deleted' => false]
-            : null;
-        $store->method('objectByUid')->willReturnCallback(fn (int $calendar, string $uid) => $row($uid));
-        $store->method('object')->willReturnCallback(fn (int $calendar, string $uri) => $row(basename($uri, '.ics')));
-        $store->method('objects')->willReturnCallback(
-            fn (int $calendar, array $uris) => array_values(array_filter(array_map(fn ($uri) => $row(basename($uri, '.ics')), $uris)))
-        );
-        $uris = $this->createMock(TaskStore::class);
-        $uris->method('uris')->willReturnCallback(fn () => array_map(fn ($uid) => $uid . '.ics', array_keys($this->tasks)));
-        $this->dav = $this->createMock(CalendarDav::class);
-        $config = $this->createMock(IConfig::class);
-        $config->method('getAppValue')->willReturn('');
-        $time = $this->createMock(ITimeFactory::class);
-        $time->method('now')->willReturn(new DateTimeImmutable('2026-10-01T12:00:00Z'));
-        $this->module = new TasksModule(
-            ScopeStub::access($store),
-            $store,
-            $uris,
-            $this->dav,
-            new TaskData(),
-            new SharedGuard($this->createMock(IUserManager::class)),
-            new TrashPolicy($config),
-            $time,
-            \OCA\Mcp\Tests\Unit\Tools\Common\OutputReferenceFilters::inactive($this)
-        );
-    }
-
+final class TaskCategoriesTest extends TaskListingCase {
     public function testATaskWithoutCategoriesReadsAsAnEmptyList(): void {
         self::assertSame([], $this->read('t1')['categories']);
         self::assertStringContainsString('BEGIN:VTODO', $this->read('t1')['icalendar'], 'the raw object is still returned');
@@ -244,40 +180,12 @@ final class TaskCategoriesTest extends TestCase {
         $secret = $this->module->call('tasks_list_tasks', ['calendar' => self::PATH, 'category' => 'Secret'], 'alice');
         self::assertSame([], $this->json($secret)['tasks']);
         foreach ([$shared, $secret] as $result) {
-            self::assertStringNotContainsString('Secret', $result['content'][0]['text']);
-            self::assertStringNotContainsString('plan', str_replace('Public plan', '', $result['content'][0]['text']));
+            // The note of an empty result echoes only the filter value the caller sent; the leak check covers task data.
+            $payload = $this->json($result);
+            unset($payload['note']);
+            $text = json_encode($payload);
+            self::assertStringNotContainsString('Secret', $text);
+            self::assertStringNotContainsString('plan', str_replace('Public plan', '', $text));
         }
-    }
-
-    /** Serializes a simple task, with extra property lines placed before its summary. */
-    private function task(string $uid, string $summary, string $extra = ''): string {
-        return "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VTODO\r\n"
-            . "UID:$uid\r\nDTSTAMP:20261001T100000Z\r\n" . $extra
-            . "SUMMARY:$summary\r\nSTATUS:NEEDS-ACTION\r\nX-CUSTOM:keep\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
-    }
-
-    /** @return array<string, mixed> the task read through the tool */
-    private function read(string $uid): array {
-        return $this->json($this->module->call('tasks_read_task', ['calendar' => self::PATH, 'uid' => $uid], 'alice'));
-    }
-
-    /** @param array<string, mixed> $arguments listing arguments besides the calendar */
-    private function list(array $arguments): array {
-        return $this->json($this->module->call('tasks_list_tasks', ['calendar' => self::PATH] + $arguments, 'alice'));
-    }
-
-    /** Expects one update of t1, checks its body and stores it so the read-back sees it. */
-    private function expectUpdate(callable $check): void {
-        $this->dav->expects(self::once())->method('update')->willReturnCallback(
-            function ($user, $calendar, $uri, $etag, $data) use ($check) {
-                $check($data);
-                $this->tasks['t1'] = $data;
-                return new DavResult(204);
-            }
-        );
-    }
-
-    private function json(array $result): array {
-        return json_decode($result['content'][0]['text'], true, 512, JSON_THROW_ON_ERROR);
     }
 }

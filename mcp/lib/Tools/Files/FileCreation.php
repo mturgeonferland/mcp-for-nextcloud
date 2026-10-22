@@ -53,7 +53,7 @@ final class FileCreation {
         private FilesAccessGuard $visibilityGuard,
         private LoggerInterface $logger,
         private LockAwareWrite $locks,
-        private ?\OCA\Mcp\Tools\Common\FileTypeGuard $fileTypes = null,
+        private \OCA\Mcp\Tools\Common\FileTypeGuard $fileTypes,
     ) {}
 
     /**

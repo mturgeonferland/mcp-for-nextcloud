@@ -12,6 +12,7 @@ use InvalidArgumentException;
 use OCA\Mcp\Tools\ToolFailure;
 use OCA\Mcp\Tools\ToolPresentation;
 use OCA\Mcp\Tools\ToolRegistry;
+use OCP\App\IAppManager;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -42,20 +43,41 @@ class McpProtocol {
     public const META_VERSION = 'io.modelcontextprotocol/protocolVersion';
     /** _meta key of the server identity in modern results. */
     public const META_SERVER_INFO = 'io.modelcontextprotocol/serverInfo';
-    /** Server identity reported in initialize and modern results. */
-    public const SERVER_INFO = ['name' => 'mcp-for-cloud', 'version' => '1.1.0'];
+    /** Product name reported in initialize and modern results. The version is the installed app. */
+    public const SERVER_NAME = 'mcp-for-cloud';
     /** HeaderMismatch error code of the 2026-07-28 specification. */
     public const HEADER_MISMATCH = -32020;
     /** UnsupportedProtocolVersion error code of the 2026-07-28 specification. */
     public const UNSUPPORTED_PROTOCOL_VERSION = -32022;
 
+    /**
+     * @param ToolRegistry $tools tools this endpoint may call
+     * @param PromptCatalog $prompts prompts this endpoint may return
+     * @param GrantPolicy $policy grants that decide what a user may do
+     * @param LoggerInterface $logger diagnostic log
+     * @param IAppManager $apps installed app versions; the core caches info.xml
+     * @param ResourceRegistry|null $resources resources this endpoint may read
+     */
     public function __construct(
         private ToolRegistry $tools,
         private PromptCatalog $prompts,
         private GrantPolicy $policy,
         private LoggerInterface $logger,
+        private IAppManager $apps,
         private ?ResourceRegistry $resources = null,
     ) {}
+
+    /**
+     * Identity reported in initialize and in modern results.
+     *
+     * The version is the installed app version. Calling getAppVersion without disabling its cache
+     * leaves the manifest read to the core, which already caches info.xml.
+     *
+     * @return array{name:string, version:string}
+     */
+    public function serverInfo(): array {
+        return ['name' => self::SERVER_NAME, 'version' => $this->apps->getAppVersion('mcp')];
+    }
 
     /**
      * Handles one JSON-RPC message.
@@ -117,7 +139,7 @@ class McpProtocol {
             return $this->result($id, [
                 'protocolVersion' => self::VERSION,
                 'capabilities' => ['tools' => new \stdClass(), 'prompts' => new \stdClass(), 'resources' => new \stdClass()],
-                'serverInfo' => self::SERVER_INFO,
+                'serverInfo' => $this->serverInfo(),
                 'instructions' => ToolPresentation::INSTRUCTIONS,
             ]);
         }
@@ -179,7 +201,7 @@ class McpProtocol {
         if ($methodHeader === '') {
             $this->logger->debug('MCP modern request without Mcp-Method header', ['app' => 'mcp', 'method' => mb_substr($method, 0, 64)]);
         }
-        $meta = [self::META_SERVER_INFO => self::SERVER_INFO];
+        $meta = [self::META_SERVER_INFO => $this->serverInfo()];
         return match ($method) {
             'server/discover' => $this->result($id, [
                 'resultType' => 'complete',
@@ -450,7 +472,7 @@ class McpProtocol {
             }
         }
         if ($modern) {
-            $result = ['resultType' => 'complete'] + $result + ['_meta' => [self::META_SERVER_INFO => self::SERVER_INFO]];
+            $result = ['resultType' => 'complete'] + $result + ['_meta' => [self::META_SERVER_INFO => $this->serverInfo()]];
         }
         return $this->result($id, $result);
     }

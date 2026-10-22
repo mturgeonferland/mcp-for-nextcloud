@@ -266,9 +266,11 @@ final class McpProtocolTest extends TestCase {
     private static function withModules(TestCase $test, array $modules, ?\Psr\Log\LoggerInterface $logger = null): McpProtocol {
         $mock = fn (string $class) => (new \ReflectionMethod($test, 'createMock'))->invoke($test, $class);
         $policy = \OCA\Mcp\Tests\Unit\InMemoryConfig::policy((new InMemoryConfig())->mock($test), new \OCA\Mcp\Tests\Unit\OAuth\InMemoryOAuthStore());
+        $apps = $mock(\OCP\App\IAppManager::class);
+        InstalledApp::mock($apps);
         return new McpProtocol(new \OCA\Mcp\Tools\ToolRegistry($modules, $policy,
-            $mock(\OCP\App\IAppManager::class), $mock(\OCP\IUserManager::class), $mock(\Psr\Log\LoggerInterface::class)),
-            new \OCA\Mcp\Service\PromptCatalog(), $policy, $logger ?? $mock(\Psr\Log\LoggerInterface::class));
+            $apps, $mock(\OCP\IUserManager::class), $mock(\Psr\Log\LoggerInterface::class)),
+            new \OCA\Mcp\Service\PromptCatalog(), $policy, $logger ?? $mock(\Psr\Log\LoggerInterface::class), $apps);
     }
 
     private function codes(array $out): array {

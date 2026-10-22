@@ -67,7 +67,7 @@ class ContactBackup {
             $root = $this->roots->getUserFolder($userId);
             $folder = NodeAccess::ensureFolder($root, $this->directory($bookName));
             // Use a separate application mutex: locking the Files folder would block newFile itself.
-            $lockKey = 'mcp-contact-backup/' . hash('sha256', $userId . '\0' . $folder->getPath());
+            $lockKey = ContactBackupLock::key($userId, $folder->getPath());
             $this->locks->acquireLock($lockKey, ILockingProvider::LOCK_EXCLUSIVE);
             $locked = true;
             $stamp = $this->time->now()->setTimezone((new UserTimezone($this->config))->forUser($userId))->format('Ymd-His');

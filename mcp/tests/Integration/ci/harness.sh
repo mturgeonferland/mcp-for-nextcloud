@@ -86,12 +86,19 @@ cmd_packages() {
 }
 
 # build_package <app dir> <destination>: the script's last output line is the archive path. Its output goes through
-# a file, not a pipe, so a failing package.sh fails the step.
+# a file, not a pipe, so a failing package.sh fails the step. package.sh writes build/ inside the app it packages, so it
+# runs on this run's own copy of the app (without tests/, build/, vendor/, node_modules/): runs of the same checkout
+# that share the engine never write the same archive.
 build_package() {
-    (cd "$1" && sh scripts/package.sh) > "$WORK/package.out"
+    src="$WORK/package-src/$(basename "$2" .tar.gz)"
+    rm -rf "$src"
+    mkdir -p "$src"
+    (cd "$1" && COPYFILE_DISABLE=1 tar --exclude ./tests --exclude ./build --exclude ./vendor --exclude ./node_modules -cf - .) \
+        | (cd "$src" && tar -xf -)
+    (cd "$src" && sh scripts/package.sh) > "$WORK/package.out"
     cat "$WORK/package.out"
     archive=$(tail -n 1 "$WORK/package.out")
-    cp "$1/$archive" "$2"
+    cp "$src/$archive" "$2"
 }
 
 # PHPUnit runs inside the Nextcloud container as a PHAR, so none of its dependencies shadow the server's own.
@@ -359,9 +366,10 @@ provision_deck() {
     hit=warm
     if [ ! -f "$archive" ]; then
         hit=cold
-        curl -fsSL -o "$archive.part" "https://github.com/nextcloud-releases/deck/releases/download/$DECK_TAG/deck-$DECK_TAG.tar.gz"
-        echo "$DECK_SHA  $archive.part" | sha256_check
-        mv "$archive.part" "$archive"
+        # The cache is shared by the runs of this checkout: each downloads to its own name and the rename is atomic.
+        curl -fsSL -o "$archive.part.$$" "https://github.com/nextcloud-releases/deck/releases/download/$DECK_TAG/deck-$DECK_TAG.tar.gz"
+        echo "$DECK_SHA  $archive.part.$$" | sha256_check
+        mv "$archive.part.$$" "$archive"
     fi
     echo "$DECK_SHA  $archive" | sha256_check
     cp "$archive" "$TOOLS_DIR/deck.tar.gz"

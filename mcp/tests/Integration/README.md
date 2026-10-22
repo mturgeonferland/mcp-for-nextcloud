@@ -24,14 +24,25 @@ upgrade mode, and runs `colima stop`, but only when the script itself started Co
 running is left running). Images stay cached as files unless `--prune-images` is given. The pinned images are
 multi-architecture and run natively as arm64 on Apple silicon; the script prints the architecture it got.
 
-Several runs can be started from different places: each names its containers and network with its own id and removes
-only those, and they take the engine in turn through `~/.colima/mcp-it.lock` (waiting runs queue in
-`~/.colima/mcp-it.queue`; a lock whose owner is gone is taken over). The run that started Colima stops it only when
-no other run is waiting, otherwise the next run takes over stopping it.
+Several runs can be started from different places, also from the same checkout: each names its containers, network
+and log directory with its own id and removes only those, packages the app from its own copy, and the Deck download
+cache is written atomically. Up to `MCP_IT_SLOTS` runs (default 2) use the engine at once, each in a slot
+(`~/.colima/mcp-it.lock`, `mcp-it.lock.2`, ...); the others wait in `~/.colima/mcp-it.queue` and get in in the order
+they arrived (numbered tickets, nobody moves while a run is still choosing its number, a run is never overtaken by one
+that arrived after it; tickets of runs that are gone are dropped, and the slot of an owner that is gone is claimed by
+one run, never removed under another). A waiting run logs its position, the runs holding the slots and those ahead of
+it. Colima is started once, under an engine switch, by the first run that finds it down, and stopped by the last run to
+leave when nobody holds a slot or waits. Each run of NC 35 + MariaDB takes about 1.5 GB of the engine's memory; the
+Colima profile here (4 CPUs, 8 GiB) fits 2 slots with room to spare, and 3 at most; give the engine about 2 GiB per slot
+plus 2 GiB before raising `MCP_IT_SLOTS` further (`MCP_IT_SLOTS=1` runs one at a time). The queue lives in
+`ci/engine-queue.sh` and is proven without Colima by `ci/engine-queue-test.sh [repetitions]` (fake `colima`/`docker`, a
+temporary `MCP_IT_LOCK_DIR`). A copy of `run-local.sh` from before the tickets or the slots still shares slot 1 safely,
+but does not wait for the queue and may take slot 1 ahead of it.
 
 **Never run `colima stop` (or `docker rm` on the `mcp-it-*` containers) by hand while a run may exist**: it cuts the run
 in progress. To shut the engine down yourself use `ci/run-local.sh --shutdown`: it waits its turn in the same queue,
-removes what dead runs left behind, and stops Colima only when no run is waiting.
+removes what dead runs left behind (never the containers of a run still in a slot), and stops Colima only when no run
+holds a slot or waits.
 
 Diagnostics: mode `baseline` installs the released baseline (the tag in the workflow) and never upgrades it, so a scenario can
 be run against the published code; `MCP_IT_PHPUNIT_ARGS="--filter SomeTest"` limits the suite to one test. They were built

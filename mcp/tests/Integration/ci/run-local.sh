@@ -8,10 +8,11 @@
 # only when this script is the one that started it (an engine that was already running is left running).
 #
 # Several runs (other agents, other terminals) share the one engine without touching each other: every run names its
-# containers and network with its own id and removes only those, and runs take the engine one after the other through
-# a lock (~/.colima/mcp-it.lock, a directory holding the owner's pid; a dead owner's lock is taken over). A run that
-# started the engine stops it only when no other run is waiting; otherwise the engine stays up and the next run takes
-# over the duty to stop it (~/.colima/mcp-it.engine).
+# containers, network and log directory with its own id and removes only those. Up to MCP_IT_SLOTS runs (default 2) use
+# the engine at once, each in a slot (~/.colima/mcp-it.lock, mcp-it.lock.2, ...: a directory holding the owner's pid;
+# a dead owner's slot is claimed over); the others wait in a queue of tickets (~/.colima/mcp-it.queue) and get in in
+# the order they arrived (see engine-queue.sh). Colima is stopped by the last run to leave, when a run of this script
+# started it (~/.colima/mcp-it.engine); otherwise the engine stays up for the runs still there.
 #
 # Usage: run-local.sh <nc 32|33|34|35> <db mariadb|pgsql|sqlite> <mode fresh|upgrade|baseline> [--prune-images]
 #        run-local.sh --shutdown   (the only safe way to stop the engine by hand; see above)
@@ -19,82 +20,29 @@
 #   --prune-images  also removes the images this run pulled (default: kept, they are only files on disk)
 #
 # Logs and artifacts (run.log, resources.log, mcp-it/artifacts/: junit.xml, nextcloud.log, observations.txt,
-# provision.log) go to mcp/tests/Integration/.local-runs/<cell>-<timestamp>/ (git-ignored). Image digests, the
+# provision.log) go to mcp/tests/Integration/.local-runs/<cell>-<timestamp>-<pid>/ (git-ignored). Image digests, the
 # baseline tag and the cell come from .github/workflows/integration.yml, so there is one list of pins.
 set -eu
 
-# Runs take the engine one after the other: the lock is a directory holding the pid of the run that owns it.
-LOCK_DIR="${MCP_IT_LOCK_DIR:-$HOME/.colima/mcp-it.lock}"
-QUEUE_DIR="${LOCK_DIR%.lock}.queue"
-# Present while a run of this script owns the duty to stop the engine (it started it); handed to the next run in the queue.
-ENGINE_FLAG="${LOCK_DIR%.lock}.engine"
-HAVE_LOCK=0
+# Runs take the engine's slots in the order they arrived (see engine-queue.sh).
+. "$(cd "$(dirname "$0")" && pwd)/engine-queue.sh"
 
-log() {
-    echo "[run-local $(date +%H:%M:%S)] $*"
-}
-
-acquire_lock() {
-    mkdir -p "$(dirname "$LOCK_DIR")" "$QUEUE_DIR"
-    echo "$$" > "$QUEUE_DIR/$$"
-    waited=0
-    until mkdir "$LOCK_DIR" 2>/dev/null; do
-        owner=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
-        if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
-            log "the run $owner that held the engine is gone; taking its lock"
-            rm -rf "$LOCK_DIR"
-            continue
-        fi
-        [ "$waited" -ge 3600 ] && { rm -f "$QUEUE_DIR/$$"; echo "Timed out waiting for the engine lock held by run ${owner:-?}" >&2; exit 3; }
-        [ $((waited % 60)) -eq 0 ] && log "waiting for the run ${owner:-?} to finish with the engine"
-        sleep 5
-        waited=$((waited + 5))
-    done
-    echo "$$" > "$LOCK_DIR/pid"
-    rm -f "$QUEUE_DIR/$$"
-    HAVE_LOCK=1
-}
-
-# Whether another live run is waiting for the engine (stale entries of dead runs are dropped).
-others_waiting() {
-    found=1
-    for entry in "$QUEUE_DIR"/*; do
-        [ -e "$entry" ] || continue
-        pid=$(cat "$entry" 2>/dev/null || true)
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            found=0
-        else
-            rm -f "$entry"
-        fi
-    done
-    return $found
-}
-
-
-# run-local.sh --shutdown: the only safe way to stop the engine by hand. It takes its turn in the queue like a run, so it
-# never cuts a run in progress, removes the containers and networks a dead run left behind, and stops Colima only when
-# nobody is waiting (otherwise the next run takes over stopping it).
+# run-local.sh --shutdown: the only safe way to stop the engine by hand. It takes its turn in the queue like a run (a
+# slot), so it never cuts a run in progress, removes the containers and networks dead runs left behind, and stops Colima
+# only when no other run uses or waits for it (otherwise the last of them stops it).
 if [ "${1:-}" = "--shutdown" ]; then
     command -v colima >/dev/null 2>&1 || { echo "colima is not installed" >&2; exit 2; }
-    trap '[ "$HAVE_LOCK" = 1 ] && rm -rf "$LOCK_DIR"' EXIT
+    trap release_lock EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
     acquire_lock
+    engine_lock || exit 3
     if colima status >/dev/null 2>&1; then
-        # Holding the lock means no run is using the engine, so what is named mcp-it-* is left over.
-        ids=$(docker ps -aq --filter 'name=mcp-it-' 2>/dev/null || true)
-        [ -n "$ids" ] && docker rm -f -v $ids >/dev/null 2>&1
-        for net in $(docker network ls --format '{{.Name}}' --filter 'name=mcp-it' 2>/dev/null || true); do
-            docker network rm "$net" >/dev/null 2>&1 || true
-        done
-        if others_waiting; then
-            echo "$$" > "$ENGINE_FLAG"
-            log "another run is waiting for the engine: Colima stays up for it, and it takes over stopping it"
-        else
-            log "stopping Colima (nobody is waiting)"
-            colima stop
-            rm -f "$ENGINE_FLAG"
-        fi
+        # Other slots may be in use: only what runs that are gone left behind is removed.
+        remove_leftovers
+        # The engine is to be stopped: by this run if nobody else is there, otherwise by the last of them to leave.
+        echo "$$" > "$ENGINE_FLAG"
+        engine_release
     else
         log "Colima is not running"
         rm -f "$ENGINE_FLAG"
@@ -119,7 +67,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$HERE/../../../.." && pwd)
 WORKFLOW="$REPO_ROOT/.github/workflows/integration.yml"
 STAMP=$(date +%Y%m%d-%H%M%S)
-LOCAL_DIR="$REPO_ROOT/mcp/tests/Integration/.local-runs/nc$CELL_NC-$CELL_DB-$CELL_MODE-$STAMP"
+LOCAL_DIR="$REPO_ROOT/mcp/tests/Integration/.local-runs/nc$CELL_NC-$CELL_DB-$CELL_MODE-$STAMP-$$"
 mkdir -p "$LOCAL_DIR"
 
 # cell_field <field>: the value of the cell's field in the workflow matrix ('' for an empty value).
@@ -151,7 +99,6 @@ export MCP_IT_NC="$CELL_NC" MCP_IT_NC_IMAGE="$NC_IMAGE" MCP_IT_DB="$CELL_DB" MCP
 export MCP_IT_MODE="$CELL_MODE" MCP_IT_BASELINE="$BASELINE"
 HARNESS="$HERE/harness.sh"
 WORK="$LOCAL_DIR/mcp-it"
-STARTED_COLIMA=0
 SAMPLER_PID=""
 START_TIME=$(date +%s)
 
@@ -203,20 +150,10 @@ cleanup() {
         git -C "$REPO_ROOT" worktree prune
     fi
     # The downloads and packages of this run are rebuilt every time; only the logs and artifacts stay.
-    rm -rf "$WORK/tools" "$WORK/branch-pkg" "$WORK/baseline-pkg" "$WORK/pglog" "$WORK"/*.tar.gz
-    if [ "$STARTED_COLIMA" = 1 ]; then
-        if others_waiting; then
-            log "another run is waiting for the engine: Colima stays up for it, and it takes over stopping it"
-        else
-            log "stopping Colima (a run of this script started it and nobody is waiting)"
-            colima stop
-            rm -f "$ENGINE_FLAG"
-        fi
-    else
-        log "Colima was already running before this run; left as it was"
-    fi
+    rm -rf "$WORK/tools" "$WORK/branch-pkg" "$WORK/baseline-pkg" "$WORK/package-src" "$WORK/pglog" "$WORK"/*.tar.gz
+    [ "$HAVE_LOCK" = 1 ] && engine_release
     summary
-    [ "$HAVE_LOCK" = 1 ] && rm -rf "$LOCK_DIR"
+    release_lock
     exit "$status"
 }
 
@@ -235,19 +172,7 @@ for tool in colima docker git php composer curl; do
 done
 
 acquire_lock
-if colima status >/dev/null 2>&1; then
-    if [ -f "$ENGINE_FLAG" ]; then
-        log "Colima was started by a run of this script that handed it over; this run stops it when nobody waits"
-        STARTED_COLIMA=1
-    else
-        log "Colima is already running (not started by this script); this run will not stop it"
-    fi
-else
-    log "starting Colima (4 CPUs, 8 GiB)"
-    STARTED_COLIMA=1
-    echo "$$" > "$ENGINE_FLAG"
-    colima start --vm-type vz --mount-type virtiofs --cpu 4 --memory 8 --disk 40
-fi
+engine_take
 docker info >/dev/null
 
 log "cell: NC $CELL_NC, $CELL_DB, $CELL_MODE (baseline $BASELINE)"

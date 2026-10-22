@@ -15,6 +15,7 @@ use OCA\Mcp\Service\GuestRestrictions;
 use OCA\Mcp\Service\ResourceRegistry;
 use OCA\Mcp\Service\VisibilityGuard;
 use OCA\Mcp\Tests\Unit\InMemoryConfig;
+use OCA\Mcp\Tests\Unit\InstalledApp;
 use OCA\Mcp\Tests\Unit\Tools\FakeTree;
 use OCA\Mcp\Tools\Common\CommonMessages;
 use OCA\Mcp\Tools\Files\FilesMessages;
@@ -338,6 +339,7 @@ final class ResourceRegistryTest extends TestCase {
             new PromptCatalog(),
             $this->policy,
             $this->createMock(LoggerInterface::class),
+            $this->installedApp(),
             $this->registry,
         );
 
@@ -485,6 +487,7 @@ final class ResourceRegistryTest extends TestCase {
             new PromptCatalog(),
             $this->policy,
             $this->createMock(LoggerInterface::class),
+            $this->installedApp(),
             $registry,
         );
 
@@ -629,7 +632,7 @@ final class ResourceRegistryTest extends TestCase {
     #[\PHPUnit\Framework\Attributes\DataProvider('erasProvider')]
     public function testAHiddenNoteAnswersAsAMissingResourceInBothEras(int $code, string $version): void {
         $protocol = new McpProtocol($this->toolRegistry, new PromptCatalog(), $this->policy, $this->createMock(LoggerInterface::class),
-            $this->registryWith($this->guardHiding([$this->noteId])));
+            $this->installedApp(), $this->registryWith($this->guardHiding([$this->noteId])));
         $params = ['uri' => 'nc://notes/' . $this->noteId]
             + ($version === McpProtocol::MODERN_VERSION ? ['_meta' => [McpProtocol::META_VERSION => McpProtocol::MODERN_VERSION]] : []);
 
@@ -640,6 +643,17 @@ final class ResourceRegistryTest extends TestCase {
         $this->assertSame($code, $out['body']['error']['code']);
         $this->assertSame(CommonMessages::notFound(), $out['body']['error']['message']);
         $this->assertStringNotContainsString('# Ideia', json_encode($out['body']));
+    }
+
+    /**
+     * The app manager the protocol reads its own version from.
+     *
+     * @return IAppManager a manager whose mcp version is the one in appinfo/info.xml
+     */
+    private function installedApp(): IAppManager {
+        $apps = $this->createMock(IAppManager::class);
+        InstalledApp::mock($apps);
+        return $apps;
     }
 
     /** A real guard with no hidden tag configured: every node is visible. */

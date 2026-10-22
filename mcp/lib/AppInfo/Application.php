@@ -146,6 +146,7 @@ class Application extends App implements IBootstrap {
             $c->get(PromptCatalog::class),
             $c->get(GrantPolicy::class),
             $c->get(LoggerInterface::class),
+            $c->get(IAppManager::class),
             $c->get(ResourceRegistry::class),
         ));
     }

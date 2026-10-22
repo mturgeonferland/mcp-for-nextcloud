@@ -14,6 +14,7 @@ use OCA\Mcp\Service\LogsAccess;
 use OCA\Mcp\Service\McpProtocol;
 use OCA\Mcp\Service\PromptCatalog;
 use OCA\Mcp\Tests\Unit\InMemoryConfig;
+use OCA\Mcp\Tests\Unit\InstalledApp;
 use OCA\Mcp\Tests\Unit\L10n\JsonL10n;
 use OCA\Mcp\Tools\ToolPresentation;
 use OCA\Mcp\Tools\ToolRegistry;
@@ -98,8 +99,10 @@ final class ToolsListContractTest extends TestCase {
         $users = $this->createMock(IUserManager::class);
         $users->method('get')->willReturn($this->createMock(IUser::class));
         $modules = array_map(fn (string $class) => $this->build($class), Application::MODULES);
+        $installed = $this->createMock(IAppManager::class);
+        InstalledApp::mock($installed);
         $protocol = new McpProtocol(new ToolRegistry($modules, $policy, $apps, $users, $this->createMock(LoggerInterface::class)),
-            new PromptCatalog(), $policy, $this->createMock(LoggerInterface::class));
+            new PromptCatalog(), $policy, $this->createMock(LoggerInterface::class), $installed);
         $out = $protocol->handle($request, $version, 'alice', json_decode($headers, true));
         return json_encode($out['body'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
@@ -320,9 +323,11 @@ final class ToolsListContractTest extends TestCase {
 
     public function testInitializeEncodesCapabilitiesAsObjects(): void {
         $policy = \OCA\Mcp\Tests\Unit\InMemoryConfig::policy((new InMemoryConfig())->mock($this), new \OCA\Mcp\Tests\Unit\OAuth\InMemoryOAuthStore());
-        $protocol = new McpProtocol(new ToolRegistry([], $policy, $this->createMock(IAppManager::class),
+        $apps = $this->createMock(IAppManager::class);
+        InstalledApp::mock($apps);
+        $protocol = new McpProtocol(new ToolRegistry([], $policy, $apps,
             $this->createMock(IUserManager::class), $this->createMock(LoggerInterface::class)),
-            new PromptCatalog(), $policy, $this->createMock(LoggerInterface::class));
+            new PromptCatalog(), $policy, $this->createMock(LoggerInterface::class), $apps);
         $out = $protocol->handle(json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => [
             'protocolVersion' => '2025-11-25', 'capabilities' => new \stdClass(), 'clientInfo' => ['name' => 'Claude-User', 'version' => '1.0'],
         ]]), '', 'alice');

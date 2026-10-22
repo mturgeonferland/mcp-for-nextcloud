@@ -439,9 +439,11 @@ final class McpControllerTest extends TestCase {
                 return \OCA\Mcp\Tools\ToolResult::json(['ok' => true]);
             }
         };
+        $apps = $this->createMock(\OCP\App\IAppManager::class);
+        InstalledApp::mock($apps);
         return new McpProtocol(new \OCA\Mcp\Tools\ToolRegistry([$module], $this->policy,
-            $this->createMock(\OCP\App\IAppManager::class), $this->createMock(\OCP\IUserManager::class), $this->createMock(\Psr\Log\LoggerInterface::class)),
-            new \OCA\Mcp\Service\PromptCatalog(), $this->policy, $this->createMock(\Psr\Log\LoggerInterface::class));
+            $apps, $this->createMock(\OCP\IUserManager::class), $this->createMock(\Psr\Log\LoggerInterface::class)),
+            new \OCA\Mcp\Service\PromptCatalog(), $this->policy, $this->createMock(\Psr\Log\LoggerInterface::class), $apps);
     }
 
     /** Alice eligible only through the Database group "team"; "staff" holds her too, without a policy. */

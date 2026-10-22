@@ -11,6 +11,7 @@ use OCA\Mcp\Service\GrantPolicy;
 use OCA\Mcp\Service\McpProtocol;
 use OCA\Mcp\Service\PromptCatalog;
 use OCA\Mcp\Tests\Unit\InMemoryConfig;
+use OCA\Mcp\Tests\Unit\InstalledApp;
 use OCA\Mcp\Tools\ToolRegistry;
 use OCP\App\IAppManager;
 use OCP\IUserManager;
@@ -39,9 +40,11 @@ final class PromptCatalogTest extends TestCase {
      * @return McpProtocol a protocol with no tool modules, so only the prompts are exercised
      */
     private function build(GrantPolicy $policy): McpProtocol {
-        return new McpProtocol(new ToolRegistry([], $policy, $this->createMock(IAppManager::class),
+        $apps = $this->createMock(IAppManager::class);
+        InstalledApp::mock($apps);
+        return new McpProtocol(new ToolRegistry([], $policy, $apps,
             $this->createMock(IUserManager::class), $this->createMock(LoggerInterface::class)),
-            new PromptCatalog(), $policy, $this->createMock(LoggerInterface::class));
+            new PromptCatalog(), $policy, $this->createMock(LoggerInterface::class), $apps);
     }
 
     /**
@@ -210,7 +213,8 @@ final class PromptCatalogTest extends TestCase {
         $result = $this->call('prompts/list', [], McpProtocol::MODERN_VERSION)->result;
         $this->assertSame('complete', $result->resultType);
         $this->assertSame([0, 'private'], [$result->ttlMs, $result->cacheScope]);
-        $this->assertSame(McpProtocol::SERVER_INFO, (array)$result->_meta->{'io.modelcontextprotocol/serverInfo'});
+        $version = InstalledApp::version();
+        $this->assertSame(['name' => McpProtocol::SERVER_NAME, 'version' => $version], (array)$result->_meta->{'io.modelcontextprotocol/serverInfo'});
         $this->assertSame([PromptCatalog::EDIT_LOCALLY], array_column($result->prompts, 'name'));
     }
 

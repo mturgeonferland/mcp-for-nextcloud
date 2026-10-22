@@ -25,13 +25,12 @@ final class NoFileDeletionTest extends TestCase {
      * allowance at all, so the Files module currently has to contain no removal of any kind.
      */
     private const ALLOWED_EMPTY_FOLDER_REMOVAL = 'lib/Tools/Files/Reorganization.php';
-    private const BATCH_UNDO = 'undoBatch';
 
     /**
      * @return list<string> every source file of the Files module
      */
     private function filesSources(): array {
-        $found = glob(__DIR__ . '/../../../lib/Tools/Files/*.php') ?: [];
+        $found = FileDeletionGuard::sources(__DIR__ . '/../../../lib/Tools/Files');
         $this->assertNotSame([], $found);
         return $found;
     }
@@ -41,33 +40,7 @@ final class NoFileDeletionTest extends TestCase {
      * and it has to sit there and nowhere else: a removal anywhere else in the module fails the test.
      */
     public function testNoFilesHandlerDeletesANode(): void {
-        foreach ($this->filesSources() as $file) {
-            $source = (string)file_get_contents($file);
-            $allowed = basename($file) === basename(self::ALLOWED_EMPTY_FOLDER_REMOVAL)
-                && $this->undoHasTheRemoval($source);
-            if ($allowed) {
-                $this->assertSame(1, preg_match_all('/->delete\(\)/', $source),
-                    'a remoção do lote é uma só, dentro do desfazer');
-                continue;
-            }
-            $this->assertDoesNotMatchRegularExpression('/->delete\(\)/', $source,
-                basename($file) . ' calls Node::delete(); the MCP removes no file and no folder');
-        }
-    }
-
-    /**
-     * @param string $source the reorganization source
-     * @return bool whether the only deletion sits inside the batch undo
-     */
-    private function undoHasTheRemoval(string $source): bool {
-        if (str_contains($source, '->delete()')) {
-            $undo = strpos($source, 'function ' . self::BATCH_UNDO);
-            $first = strpos($source, '->delete()');
-            $this->assertNotFalse($undo, 'a remoção precisa estar dentro de ' . self::BATCH_UNDO . '()');
-            $this->assertGreaterThan($undo, $first, 'a remoção está antes de ' . self::BATCH_UNDO . '()');
-            return true;
-        }
-        return false;
+        FileDeletionGuard::assertNoNodeDeletion($this->filesSources(), __DIR__ . '/../../../' . self::ALLOWED_EMPTY_FOLDER_REMOVAL);
     }
 
     /**

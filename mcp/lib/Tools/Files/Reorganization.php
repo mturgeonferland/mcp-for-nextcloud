@@ -41,6 +41,7 @@ final class Reorganization {
         private \OCP\IUserManager $userManager,
         private ?\OCA\Mcp\Service\Scope\FilesAccessGuard $visibilityGuard = null,
         private ?LockAwareWrite $locks = null,
+        private ?\OCA\Mcp\Tools\Common\FileTypeGuard $fileTypes = null,
     ) {}
 
     /**
@@ -238,29 +239,7 @@ final class Reorganization {
      * @throws ToolFailure for an occupied destination, a stale ETag, a ceiling or a denied write
      */
     public function copy(Folder $root, string $userId, string $from, string $to, ?string $etag, bool $confirmedShared): array {
-        $source = $this->writable($root, $from);
-        FolderExposureGate::assertExposure($source, $this->visibilityGuard);
-        NodeAccess::checkEtag($source, $etag);
-        $to = self::notBackup(PathGuard::normalize($to, 'to'));
-        $this->assertFree($root, $to);
-        $measured = $this->measure($source);
-        if (($payload = $this->confirmBoth($source, $from, $this->destination($root, $to), $to, $userId, $confirmedShared)) !== null) {
-            return $payload;
-        }
-        $receipt = $root->getRelativePath($source->getPath()) ?? '';
-        // Reading a locked file is allowed, so the source is not checked; files_lock may still refuse a copy between
-        // storages, and that refusal is explained.
-        $copy = NodeAccess::mutate(fn () => $this->locks === null ? $source->copy($this->absolute($root, $to)) : $this->locks->capture(fn (): Node => $source->copy($this->absolute($root, $to)), $source, $userId), $this->visibilityGuard);
-        $this->visibilityGuard?->assertVisible($copy);
-        return [
-            'from' => $receipt,
-            'to' => $to,
-            'idBefore' => (int)$source->getId(),
-            'idAfter' => (int)$copy->getId(),
-            'nodes' => $measured['nodes'],
-            'bytes' => $measured['bytes'],
-            'access' => $this->access->describe($copy, $userId),
-        ];
+        return (new \OCA\Mcp\Tools\Files\Handler\CopyHandler($this->copyMoveContext()))->handle($root, $userId, $from, $to, $etag, $confirmedShared);
     }
 
     /**
@@ -279,33 +258,16 @@ final class Reorganization {
      * @throws ToolFailure for an occupied destination, a stale ETag, another storage, a folder into itself or a denied write
      */
     public function move(Folder $root, string $userId, string $from, string $to, ?string $etag, bool $confirmedShared): array {
-        $check = $this->inspect($root, $from, $to, $etag);
-        FolderExposureGate::assertMove($root, $check->source, $check->to, $this->visibilityGuard);
-        $this->assertUnlocked($check->source, $userId);
-        if (($payload = $this->confirmBoth($check->source, $from, $check->destination, $check->to, $userId, $confirmedShared)) !== null) {
-            return $payload;
-        }
-        // Everything is read before the move: afterwards the node answers from its new path, and a receipt
-        // read too late is a claim about nothing.
-        $receipt = $root->getRelativePath($check->source->getPath()) ?? '';
-        $idBefore = (int)$check->source->getId();
-        $versionsBefore = $this->versions($check->source, $userId);
-        $sharesBefore = $this->report->shares($check->source, $userId);
-        $moved = $this->locked(fn (): Node => $check->source->move($this->absolute($root, $check->to)), $check->source, $userId);
-        $this->visibilityGuard?->assertVisible($moved);
-        $idAfter = (int)$moved->getId();
-        return [
-            'from' => $receipt,
-            'to' => $check->to,
-            'idBefore' => $idBefore,
-            'idAfter' => $idAfter,
-            'idPreserved' => $idAfter === $idBefore,
-            'versionsBefore' => $versionsBefore,
-            'versionsAfter' => $this->versions($moved, $userId),
-            'sharesBefore' => $sharesBefore,
-            'sharesAfter' => $this->report->shares($moved, $userId),
-            'access' => $this->access->describe($moved, $userId),
-        ];
+        return (new \OCA\Mcp\Tools\Files\Handler\MoveHandler($this->copyMoveContext()))->handle($root, $userId, $from, $to, $etag, $confirmedShared);
+    }
+
+    /**
+     * Build the shared wiring for the single copy/move handlers.
+     *
+     * @return CopyMoveContext The context over this operation's native checks and policy.
+     */
+    private function copyMoveContext(): CopyMoveContext {
+        return new CopyMoveContext($this, $this->access, $this->report, $this->visibilityGuard, $this->locks, $this->fileTypes);
     }
 
     /**
@@ -329,7 +291,7 @@ final class Reorganization {
      * @param string $userId authenticated user
      * @return Node what the write returned
      */
-    private function locked(callable $write, Node $node, string $userId): Node {
+    public function locked(callable $write, Node $node, string $userId): Node {
         return NodeAccess::mutate(fn () => $this->locks === null ? $write() : $this->locks->run($write, $node, $userId), $this->visibilityGuard);
     }
 
@@ -529,25 +491,7 @@ final class Reorganization {
      * @throws ToolFailure for an occupied destination, a stale ETag, a ceiling or a denied write
      */
     public function planCopy(Folder $root, string $userId, string $from, string $to, ?string $etag): array {
-        $source = $this->writable($root, $from);
-        FolderExposureGate::assertExposure($source, $this->visibilityGuard);
-        NodeAccess::checkEtag($source, $etag);
-        $to = self::notBackup(PathGuard::normalize($to, 'to'));
-        $this->assertFree($root, $to);
-        $measured = $this->measure($source);
-        $destination = $this->destination($root, $to);
-        return [
-            'action' => 'files_copy',
-            'from' => $root->getRelativePath($source->getPath()) ?? '',
-            'to' => $to,
-            'idBefore' => (int)$source->getId(),
-            'nodes' => $measured['nodes'],
-            'bytes' => $measured['bytes'],
-            'access' => $this->access->describe($source, $userId),
-            'shared' => $this->sharedOf($userId, $source, $destination),
-            'recoverable' => true,
-            'message' => FilesMessages::planCopy(),
-        ];
+        return (new \OCA\Mcp\Tools\Files\Handler\CopyHandler($this->copyMoveContext()))->planCopy($root, $userId, $from, $to, $etag);
     }
 
     /**
@@ -564,20 +508,7 @@ final class Reorganization {
      * @throws ToolFailure when the source is missing, unreadable, not changeable, or the destination cannot receive
      */
     public function planMove(Folder $root, string $userId, string $from, string $to, ?string $etag): array {
-        $check = $this->inspect($root, $from, $to, $etag);
-        FolderExposureGate::assertMove($root, $check->source, $check->to, $this->visibilityGuard);
-        return [
-            'action' => 'files_move',
-            'from' => $root->getRelativePath($check->source->getPath()) ?? '',
-            'to' => $check->to,
-            'idBefore' => (int)$check->source->getId(),
-            'isDir' => $check->source instanceof Folder,
-            'versions' => $this->versions($check->source, $userId),
-            'access' => $this->access->describe($check->source, $userId),
-            'shared' => $this->sharedOf($userId, $check->source, $check->destination),
-            'recoverable' => true,
-            'message' => FilesMessages::planMove(),
-        ] + ($this->locks?->planNotice($check->source, $userId) ?? []);
+        return (new \OCA\Mcp\Tools\Files\Handler\MoveHandler($this->copyMoveContext()))->planMove($root, $userId, $from, $to, $etag);
     }
 
     /**
@@ -890,7 +821,7 @@ final class Reorganization {
      * @param Node ...$nodes ends of the operation: the source and the folder that would receive it
      * @return list<array<string, mixed>> the ownership description of each non-personal end, empty when all are personal
      */
-    private function sharedOf(string $userId, Node ...$nodes): array {
+    public function sharedOf(string $userId, Node ...$nodes): array {
         $shared = [];
         foreach ($nodes as $node) {
             $info = $this->access->describe($node, $userId);
@@ -1118,7 +1049,7 @@ final class Reorganization {
      * @return Node the readable, writable source
      * @throws ToolFailure when it is in the backup folder, does not exist, cannot be read or cannot be changed
      */
-    private function writable(Folder $root, string $path): Node {
+    public function writable(Folder $root, string $path): Node {
         // run() turns a missing node into a ToolFailure here, so a batch plan can put the item in its
         // denied list instead of the whole call failing.
         $path = self::notBackup(PathGuard::normalize($path));
@@ -1137,7 +1068,7 @@ final class Reorganization {
      * @return string the same path
      * @throws ToolFailure when the path is /MCP backups or inside it
      */
-    private static function notBackup(string $path): string {
+    public static function notBackup(string $path): string {
         if (FileBackup::isBackupPath($path)) {
             throw new ToolFailure(FilesMessages::backupPath());
         }
@@ -1149,7 +1080,7 @@ final class Reorganization {
      * @param string $to destination path, user-relative
      * @throws ToolFailure when anything already sits there
      */
-    private function assertFree(Folder $root, string $to): void {
+    public function assertFree(Folder $root, string $to): void {
         $rel = ltrim($to, '/');
         if ($to === '/' || $root->nodeExists($rel)) {
             if ($to !== '/' && $this->visibilityGuard !== null) {
@@ -1202,7 +1133,7 @@ final class Reorganization {
      * @return Folder the destination folder, or the existing ancestor of a planned folder
      * @throws ToolFailure when it does not exist or cannot take new entries
      */
-    private function destination(Folder $root, string $path, array $mkdirs = []): Folder {
+    public function destination(Folder $root, string $path, array $mkdirs = []): Folder {
         $segments = PathGuard::segments($path);
         array_pop($segments);
         $parentPath = '/' . implode('/', $segments);
@@ -1243,7 +1174,7 @@ final class Reorganization {
      * @param bool $confirmedShared whether the caller passed confirm_shared
      * @return array<string, mixed>|null the confirmation payload, or null when the change may proceed
      */
-    private function confirmBoth(
+    public function confirmBoth(
         Node $source,
         string $sourcePath,
         Folder $destination,
@@ -1263,7 +1194,7 @@ final class Reorganization {
      * @param string $userId authenticated user
      * @return int|null the version count, or null for a folder or when versioning is off
      */
-    private function versions(Node $node, string $userId): ?int {
+    public function versions(Node $node, string $userId): ?int {
         return $node instanceof File ? $this->report->versions($node, $this->user($userId)) : null;
     }
 
@@ -1272,7 +1203,7 @@ final class Reorganization {
      * @param string $path user-relative path
      * @return string the absolute path in the user's own storage, which is what Node::move() takes
      */
-    private function absolute(Folder $root, string $path): string {
+    public function absolute(Folder $root, string $path): string {
         return $root->getPath() . '/' . ltrim($path, '/');
     }
 

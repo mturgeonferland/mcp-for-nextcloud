@@ -14,10 +14,13 @@ use OCA\Mcp\Tools\Common\NodeAccessInfo;
 use OCA\Mcp\Tools\Common\SharedWriteGuard;
 use OCA\Mcp\Tests\Unit\Tools\FakeTree;
 use OCA\Mcp\Tests\Unit\Tools\FakeUsers;
+use OCA\Mcp\Tools\Common\LockAwareWrite;
 use OCA\Mcp\Tools\Files\FileBackup;
 use OCA\Mcp\Tools\Files\TextExtractor;
 use OCA\Mcp\Tools\Files\FilesMessages;
+use OCA\Mcp\Tools\Files\VersionRestore;
 use OCA\Mcp\Tools\Files\VersionTools;
+use OCA\Mcp\Service\Scope\FilesAccessGuard;
 use OCA\Mcp\Tools\Common\CommonMessages;
 use OCA\Mcp\Tools\ToolFailure;
 use OCP\App\IAppManager;
@@ -68,8 +71,10 @@ final class VersionToolsTest extends TestCase {
         $time->method('getTime')->willReturn(1790000000);
         $config = (new \OCA\Mcp\Tests\Unit\InMemoryConfig())->mock($this);
         $this->backup = new FileBackup($this->apps, $this->users, $time, $config);
+        $access = new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager());
         $this->tools = new VersionTools($this->apps, $this->users, new TextExtractor($temp), $this->backup,
-            new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager()), $container, new \OCA\Mcp\Tools\Files\OcrSupport($this->apps));
+            $access, $container, new \OCA\Mcp\Tools\Files\OcrSupport($this->apps),
+            versionRestore: $this->wiredRestore($access, $container, null, null));
     }
 
     private function file(): \OCP\Files\File {
@@ -193,9 +198,10 @@ final class VersionToolsTest extends TestCase {
         $container = $this->createMock(ContainerInterface::class);
         $container->method('get')->willReturn($this->manager);
         $locks = $locked ? (new FakeLockManager())->service($this) : null;
+        $access = new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager());
         $tools = new VersionTools($this->apps, $this->users, $this->createMock(TextExtractor::class), $this->backup,
-            new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager()),
-            $container, new \OCA\Mcp\Tools\Files\OcrSupport($this->apps), $locks, $guard);
+            $access, $container, new \OCA\Mcp\Tools\Files\OcrSupport($this->apps), $locks, $guard,
+            $this->wiredRestore($access, $container, $locks, $guard));
         try {
             $tools->restore($this->tree->rootFolder(), $this->file(), '/Documentos/ata.md', '1759100000', 'alice');
             $this->fail('Restore published a hidden receipt');
@@ -215,8 +221,11 @@ final class VersionToolsTest extends TestCase {
     public function testRestoreWithoutVersioningNeverRollsBack(): void {
         $this->apps = $this->createMock(IAppManager::class);
         $this->apps->method('isEnabledForUser')->willReturn(false);
+        $access = new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager());
+        $container = $this->createMock(ContainerInterface::class);
         $tools = new VersionTools($this->apps, $this->users, $this->createMock(TextExtractor::class), $this->backup,
-            new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager()), $this->createMock(ContainerInterface::class), new \OCA\Mcp\Tools\Files\OcrSupport($this->apps));
+            $access, $container, new \OCA\Mcp\Tools\Files\OcrSupport($this->apps),
+            versionRestore: $this->wiredRestore($access, $container, null, null, $this->apps));
         try {
             $tools->restore($this->tree->rootFolder(), $this->file(), '/Documentos/ata.md', '1759100000', 'alice');
             $this->fail('a restore without versioning must not proceed');
@@ -245,10 +254,20 @@ final class VersionToolsTest extends TestCase {
         $container = $this->createMock(ContainerInterface::class);
         $container->method('get')->willReturnCallback(fn (string $id) => $id === self::MANAGER ? $this->manager : null);
         $service = $locks->service($this);
+        $access = new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager());
         return new VersionTools($this->apps, $this->users, $this->createMock(TextExtractor::class),
             new FileBackup($this->apps, $this->users, $time, $config, null, $service),
-            new NodeAccessInfo(FakeUsers::manager($this, FakeUsers::DEFAULTS), $this->tree->shareManager()), $container,
-            new \OCA\Mcp\Tools\Files\OcrSupport($this->apps), $service);
+            $access, $container, new \OCA\Mcp\Tools\Files\OcrSupport($this->apps), $service,
+            versionRestore: $this->wiredRestore($access, $container, $service, null));
+    }
+
+    /**
+     * The restore collaborator over the same apps, container, locks and visibility the tools object uses.
+     *
+     * An absent policy key is mode off, so these tests keep the behaviour they had before the type gate.
+     */
+    private function wiredRestore(NodeAccessInfo $access, ContainerInterface $container, ?LockAwareWrite $locks, ?FilesAccessGuard $guard, ?IAppManager $apps = null): VersionRestore {
+        return new VersionRestore($apps ?? $this->apps, $this->users, AbsentFileTypePolicy::gate($this), $access, $container, $locks, $guard);
     }
 
     /**

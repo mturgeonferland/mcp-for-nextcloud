@@ -8,8 +8,6 @@ declare(strict_types=1);
 namespace OCA\Mcp\Tools\Files;
 
 use OCA\Mcp\Tools\Common\LockAwareWrite;
-use OCA\Mcp\Tools\Common\LockWriteFailure;
-use OCA\Mcp\Tools\Common\NodeAccess;
 use OCA\Mcp\Tools\Common\NodeAccessInfo;
 use OCA\Mcp\Tools\ToolFailure;
 use OCP\App\IAppManager;
@@ -34,8 +32,6 @@ final class VersionTools {
     public const APP = 'files_versions';
     /** Versions returned when the caller asks for no limit. */
     public const DEFAULT_LIMIT = 50;
-    /** Bytes of a version held in memory while it is copied for the restore; more spills to a temporary file. */
-    private const COPY_MEMORY = 8388608;
     /** Characters returned by files_version_read before the text is truncated. */
     public const MAX_CHARS = 100000;
     /** Class resolved lazily; a string so this file autoloads with files_versions absent. */
@@ -51,6 +47,7 @@ final class VersionTools {
         private OcrSupport $ocr,
         private ?LockAwareWrite $locks = null,
         private ?\OCA\Mcp\Service\Scope\FilesAccessGuard $visibilityGuard = null,
+        private ?VersionRestore $versionRestore = null,
     ) {}
 
     /**
@@ -148,17 +145,8 @@ final class VersionTools {
     /**
      * Brings a stored version back, after the same backup files_edit performs.
      *
-     * With a lock provider (files_lock) there, the version is read through files_versions and written through the
-     * file, like any edit: files_lock refuses the write when the file is locked, and the write goes through the normal
-     * versioning of the file, as the versions backend decides it. What this method guarantees about the current
-     * content is the backup in /MCP backups, taken before. The core rollback is not used then, because VersionManager::rollback()
-     * (Nextcloud 32 to 35, handleAppLocks) catches the refusal of a Text or Office lock and repeats the write inside
-     * that app's lock scope, over the document still open in the editor. The file then shows the restore time as its
-     * modification time and the change as an edit, where the core rollback would show the version's time and a restore.
-     * Without a lock provider no lock can exist, and the core rollback runs as before.
-     *
-     * The shared-write guard runs in the module before this call, so the confirmation payload is a
-     * non-error result produced there and never reaches this class.
+     * The backup, the lock-aware write and the native rollback live in {@see VersionRestore}. This method only
+     * forwards the call, including the backup this object was constructed with.
      *
      * @param Folder $root the user's folder
      * @param File $file file to restore
@@ -167,79 +155,11 @@ final class VersionTools {
      * @param string $viewerUid authenticated user
      * @return array{path:string, size:int, etag:string, access:array<string, mixed>, backup:string, version:string}
      * @throws ToolFailure when versioning is off, the version does not exist or cannot be read, the backup fails, a
-     *         lock refuses the write ({@see LockWriteFailure}) or the rollback reports failure
+     *         lock refuses the write or the rollback reports failure
      */
     public function restore(Folder $root, File $file, string $path, string $revision, string $viewerUid): array {
-        $user = $this->requireVersioning($viewerUid);
-        $version = $this->find($user, $file, $revision);
-        // The backup refuses a locked file before copying it.
-        $copy = $this->backup->prepare($root, $file, $path, $viewerUid, null);
-        $this->visibilityGuard?->assertVisible($file);
-        $manager = $this->manager();
-        if ($this->locks !== null && $this->locks->providerAvailable()) {
-            $this->writeVersion($manager, $version, $file, $path, $viewerUid, $copy);
-        } elseif (NodeAccess::mutate(fn () => $manager->rollback($version), $this->visibilityGuard) === false) {
-            throw new ToolFailure(FilesMessages::versionRestoreFailed());
-        }
-        $node = NodeAccess::requireFile(NodeAccess::get($root, $path, $this->visibilityGuard));
-        $this->visibilityGuard?->assertVisible($node);
-        return [
-            'path' => $path,
-            'size' => (int)$node->getSize(),
-            'etag' => (string)$node->getEtag(),
-            'access' => $this->access->describe($node, $viewerUid),
-            'backup' => $copy,
-            'version' => $revision,
-        ];
-    }
-
-    /**
-     * Writes the content of a version over the file through the node, checking the locks right before.
-     *
-     * The version is read into a copy first and its own stream is closed before the write starts. A stream open on the
-     * version while the file is written holds the version's file open on the storage; where files_lock is installed
-     * (the Nextcloud 34 and 35 images ship it), taking the lock the write needs then fails with "locked by another
-     * operation", as the restore of a team folder file showed. The copy lives in memory up to {@see self::COPY_MEMORY}
-     * bytes and spills to a temporary file beyond that, so a large version costs no more memory than that.
-     *
-     * @param object $manager the files_versions manager
-     * @param object $version the IVersion to bring back
-     * @param File $file file to restore
-     * @param string $path normalized user-relative path of $file
-     * @param string $viewerUid authenticated user
-     * @param string $copy user-relative path of the backup taken before
-     * @throws ToolFailure when the version cannot be read or copied (nothing is written then) or a lock refuses the write
-     */
-    private function writeVersion(object $manager, object $version, File $file, string $path, string $viewerUid, string $copy): void {
-        $stream = $manager->read($version);
-        if (!is_resource($stream)) {
-            throw new ToolFailure(FilesMessages::versionRestoreFailed());
-        }
-        $content = null;
-        try {
-            try {
-                $content = fopen('php://temp/maxmemory:' . self::COPY_MEMORY, 'w+');
-                if ($content === false || stream_copy_to_stream($stream, $content) === false) {
-                    throw new ToolFailure(FilesMessages::versionRestoreFailed());
-                }
-            } finally {
-                // Before the write: the version's file must not be open while the file is written.
-                if (is_resource($stream)) {
-                    fclose($stream);
-                }
-            }
-            NodeAccess::mutate(fn () => $this->locks->run(static function () use ($file, $content): void {
-                // Rewound inside, so a repeated write by the lock check starts from the first byte.
-                rewind($content);
-                $file->putContent($content);
-            }, $file, $viewerUid, $path), $this->visibilityGuard);
-        } catch (LockWriteFailure $e) {
-            throw $e->withNote(FilesMessages::originalKept($copy));
-        } finally {
-            if (is_resource($content)) {
-                fclose($content);
-            }
-        }
+        return ($this->versionRestore ?? throw new \LogicException('VersionRestore is not wired'))
+            ->restore($root, $file, $path, $revision, $viewerUid, $this->backup);
     }
 
     /**

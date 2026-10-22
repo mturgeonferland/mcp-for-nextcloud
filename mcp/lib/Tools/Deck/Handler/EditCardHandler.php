@@ -206,8 +206,8 @@ final class EditCardHandler extends AbstractHandler {
 	 * @param Card $before Card as read before the update.
 	 * @param string $title Title sent.
 	 * @param string $description Description sent.
-	 * @param string|null $duedate Due date sent; only whether there is one is compared, since Deck stores the instant
-	 *     in the caller's timezone.
+	 * @param string|null $duedate Due date sent; only presence is compared here. MCP sends UTC with Z; Deck stores
+	 *     a timezone-less datetime and hydrates it in UTC, so local and read-back strings may differ.
 	 * @return Card|null The saved card, or null when the update did not happen.
 	 */
 	private function savedEdit(string $userId, Card $before, string $title, string $description, ?string $duedate): ?Card {

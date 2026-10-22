@@ -900,23 +900,14 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	}
 
 	/**
-	 * Due date as Deck should store it.
+	 * Delegate calendar-day interpretation and UTC native storage to the focused date boundary.
 	 *
-	 * A bare `YYYY-MM-DD` from the tools becomes midnight of that day for the caller, since Deck would
-	 * otherwise read it as UTC midnight and the card would show up a day early west of Greenwich. A
-	 * full timestamp (the current date kept by an edit that did not touch it) is passed through, so
-	 * the time set in the Deck web interface survives.
-	 *
-	 * @param string $userId UID of the authenticated caller.
-	 * @param string|null $duedate Day, ISO 8601 timestamp, or null to clear the date.
-	 * @return string|null Value for `CardService`.
+	 * @param string $userId UID whose account timezone interprets the day.
+	 * @param string|null $duedate Validated calendar day, existing native instant, or null.
+	 * @return string|null UTC with Z for a calendar day or preserved native instant, or null.
 	 */
 	private function instant(string $userId, ?string $duedate): ?string {
-		if ($duedate === null || preg_match('/^\d{4}-\d{2}-\d{2}$/', $duedate) !== 1) {
-			return $duedate;
-		}
-
-		return CardCriteria::localMidnight($duedate, $this->zone($userId));
+		return CardDueDate::forDeck($duedate, $this->zone($userId));
 	}
 
 	/**

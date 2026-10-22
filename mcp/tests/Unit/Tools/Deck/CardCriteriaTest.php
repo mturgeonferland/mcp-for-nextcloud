@@ -62,11 +62,32 @@ final class CardCriteriaTest extends TestCase {
 		self::assertFalse(CardCriteria::matches($card, CardCriteria::STATUS_ALL, '2026-09-29', $now, $this->saoPaulo));
 	}
 
-	public function testDayWrittenByTheToolsIsLocalMidnightAndReadsBackAsTheSameDay(): void {
+	/**
+	 * A previous UTC day remains today in Tokyo for both date filters and overdue classification.
+	 *
+	 * @return void
+	 */
+	public function testEasternTimezoneUsesTheLocalDayForBoundsAndOverdue(): void {
+		$zone = new \DateTimeZone('Asia/Tokyo');
+		$card = $this->card(['duedate' => new \DateTime('2026-09-30T15:00:00Z')]);
+		$now = $this->instant('2026-10-01 03:00:00');
+
+		self::assertSame('2026-10-01', CardCriteria::dueDay($card, $zone));
+		self::assertFalse(CardCriteria::matches($card, CardCriteria::STATUS_ALL, '2026-09-30', $now, $zone));
+		self::assertTrue(CardCriteria::matches($card, CardCriteria::STATUS_ALL, '2026-10-01', $now, $zone));
+		self::assertFalse(CardCriteria::isOverdue($card, $now, $zone));
+	}
+
+	/**
+	 * Plans retain local spelling while representing the same instant as UTC.
+	 *
+	 * @return void
+	 */
+	public function testLocalMidnightForPlansRepresentsTheSameDayInUtc(): void {
 		$stored = CardCriteria::localMidnight('2026-10-01', $this->saoPaulo);
 
 		self::assertSame('2026-10-01T00:00:00-03:00', $stored);
-		// Deck parses the string into a DateTime and keeps it in UTC.
+		// Compare the local plan value with its UTC equivalent; native persistence is covered separately.
 		$card = $this->card(['duedate' => (new \DateTime($stored))->setTimezone(new \DateTimeZone('UTC'))]);
 		self::assertSame('2026-10-01', CardCriteria::dueDay($card, $this->saoPaulo));
 	}

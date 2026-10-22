@@ -54,6 +54,10 @@ function cardReadable(CardService $cards, int $id): bool {
     try { $cards->find($id); return true; }
     catch (OCA\Deck\NoPermissionException $e) { return false; }
 }
+if (str_starts_with($action, 'date-')) {
+    echo json_encode(OCA\Mcp\Tests\Integration\Deck\CardDueDateFixture::run($uid, $action, $in), JSON_THROW_ON_ERROR);
+    exit;
+}
 if (str_starts_with($action, 'link-')) {
     try {
         echo json_encode(OCA\Mcp\Tests\Integration\Deck\CardFileLinkFixture::run($uid, $action, $in), JSON_THROW_ON_ERROR);

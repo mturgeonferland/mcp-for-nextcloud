@@ -23,6 +23,7 @@ use OCA\Deck\Service\PermissionService;
 use OCA\Deck\Service\StackService;
 use OCA\Mcp\Service\UserTimezone;
 use OCA\Mcp\Tools\Deck\CardCriteria;
+use OCA\Mcp\Tools\Deck\CardDueDate;
 use OCA\Mcp\Tools\Deck\DeckServiceGateway;
 use OCA\Mcp\Tools\Deck\DeckSessionException;
 use OCA\Deck\Service\AssignmentService;
@@ -247,18 +248,28 @@ final class DeckServiceGatewayTest extends TestCase {
 		self::assertSame($card, $this->gateway->findCard('alice', 7));
 	}
 
+	/**
+	 * The native creation call receives a UTC wire value at the last position.
+	 *
+	 * @return void
+	 */
 	public function testCreateCardIsANoteOwnedByTheCallerAtTheEndOfTheStack(): void {
 		$card = $this->card();
 		$this->recordSetUserId();
 		$this->services[CardService::class]
 			->expects(self::once())
 			->method('create')
-			->with('Fechar', 10, 'note', 99999, 'alice', 'Com o cliente', CardCriteria::localMidnight('2026-03-01', new \DateTimeZone(date_default_timezone_get())))
+			->with('Fechar', 10, 'note', 99999, 'alice', 'Com o cliente', CardDueDate::forDeck('2026-03-01', new \DateTimeZone(date_default_timezone_get())))
 			->willReturn($card);
 
 		self::assertSame($card, $this->gateway->createCard('alice', 10, 'Fechar', 'Com o cliente', '2026-03-01'));
 	}
 
+	/**
+	 * Account midnight is converted to UTC before the native creation call.
+	 *
+	 * @return void
+	 */
 	public function testDayWrittenByTheToolsIsMidnightInTheCallerTimezone(): void {
 		$config = $this->createMock(IConfig::class);
 		$config->method('getUserValue')->willReturn('America/Sao_Paulo');
@@ -267,13 +278,18 @@ final class DeckServiceGatewayTest extends TestCase {
 		$this->services[CardService::class]
 			->expects(self::once())
 			->method('create')
-			->with('Fechar', 10, 'note', 99999, 'alice', '', '2026-10-01T00:00:00-03:00')
+			->with('Fechar', 10, 'note', 99999, 'alice', '', '2026-10-01T03:00:00Z')
 			->willReturn($this->card());
 
 		$gateway->createCard('alice', 10, 'Fechar', '', '2026-10-01');
 	}
 
-	public function testUpdateKeepsAFullTimestampUntouched(): void {
+	/**
+	 * Existing instants keep their timestamp while their native wire spelling is normalized to UTC Z.
+	 *
+	 * @return void
+	 */
+	public function testUpdatePreservesAFullTimestampInUtc(): void {
 		$config = $this->createMock(IConfig::class);
 		$config->method('getUserValue')->willReturn('America/Sao_Paulo');
 		$gateway = new DeckServiceGateway($this->container, $this->time, new UserTimezone($config));
@@ -282,7 +298,7 @@ final class DeckServiceGatewayTest extends TestCase {
 		$this->services[CardService::class]
 			->expects(self::once())
 			->method('update')
-			->with(7, 'Card', 10, 'note', 'alice', '', 0, '2026-10-01T18:30:00+00:00')
+			->with(7, 'Card', 10, 'note', 'alice', '', 0, '2026-10-01T18:30:00Z')
 			->willReturn($card);
 
 		$gateway->updateCard('alice', $card, 'Card', '', '2026-10-01T18:30:00+00:00');

@@ -98,18 +98,17 @@ final class CardCriteria {
 	}
 
 	/**
-	 * The instant a `YYYY-MM-DD` written by the tools stands for: midnight of that day for the user.
+	 * Local midnight used to compare and display a calendar day in an existing plan.
 	 *
-	 * Deck parses the string with `new \DateTime()`, which reads the offset, so the card reads back as
-	 * the same day in {@see self::dueDay()}. A bare day would be parsed as UTC midnight and show up as
-	 * the previous day for anyone west of Greenwich.
+	 * Native writes use CardDueDate::forDeck instead: Deck's datetime binding discards offsets.
+	 * This helper remains local so an unchanged plan instant keeps the account's spelling.
 	 *
-	 * @param string $day Validated `YYYY-MM-DD`.
-	 * @param \DateTimeZone $zone Timezone of the user.
-	 * @return string ISO 8601 with the user's offset, e.g. `2026-10-01T00:00:00-03:00`.
+	 * @param string $day Validated YYYY-MM-DD calendar day.
+	 * @param \DateTimeZone $zone Timezone of the account.
+	 * @return string Local-midnight ISO 8601 value with the account's offset, for plans only.
 	 */
 	public static function localMidnight(string $day, \DateTimeZone $zone): string {
-		return (new \DateTimeImmutable($day . ' 00:00:00', $zone))->format(\DateTimeInterface::ATOM);
+		return CardDueDate::midnight($day, $zone)->format(\DateTimeInterface::ATOM);
 	}
 
 	/**

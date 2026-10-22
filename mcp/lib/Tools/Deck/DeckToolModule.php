@@ -891,7 +891,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	}
 
 	/**
-	 * The instant a due date sent as a day becomes, exactly as the gateway writes it.
+	 * Local midnight of the day, as shown in the plan; the gateway stores the same instant in UTC.
 	 *
 	 * @param string|null $day `YYYY-MM-DD`, or null to clear the date.
 	 * @param \DateTimeZone $zone Timezone of the caller.

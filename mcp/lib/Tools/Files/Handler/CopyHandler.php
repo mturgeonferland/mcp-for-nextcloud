@@ -13,6 +13,8 @@ use OCA\Mcp\Tools\ToolFailure;
 use OCP\Files\Folder;
 use OCP\Files\Node;
 use OCA\Mcp\Tools\Files\CopyMoveContext;
+use OCA\Mcp\Tools\Files\FileTypePreflight;
+use OCA\Mcp\Tools\Files\ListedTreeCopy;
 use OCA\Mcp\Tools\Files\FolderExposureGate;
 use OCA\Mcp\Tools\Files\FilesMessages;
 
@@ -35,7 +37,7 @@ final class CopyHandler {
 	 * @param string $to destination path, user-relative
 	 * @param string|null $etag ETag the caller read before, null to skip the check
 	 * @param bool $confirmedShared whether the caller passed confirm_shared
-	 * @return array{from:string, to:string, idBefore:int, idAfter:int, nodes:int, bytes:int, access:array<string, mixed>}|array<string, mixed>
+	 * @return array{from:string, to:string, idBefore:int, idAfter:int|null, nodes:int, bytes:int, access:array<string, mixed>|null, partial:bool, created:list<string>, conflicts:list<array{path:string,reason:string}>, not_copied:list<string>}|array<string, mixed>
 	 *   the receipt, or the shared-write confirmation instead of a receipt when one is still missing
 	 * @throws \InvalidArgumentException for a path with traversal or control characters
 	 * @throws ToolFailure for an occupied destination, a stale ETag, a ceiling or a denied write
@@ -47,24 +49,29 @@ final class CopyHandler {
 		$to = CopyMoveContext::notBackup(PathGuard::normalize($to, 'to'));
 		$this->context->assertFree($root, $to);
 		$destination = $this->context->destination($root, $to);
-		$this->context->policy()->assertProjected($source, $to);
-		$measured = $this->context->reorganization->measure($source);
+		$manifest = (new FileTypePreflight($this->context))->inspect($source, $to, $this->context->policy()->snapshot(), true);
+		$measured = $manifest ?? $this->context->reorganization->measure($source);
 		if (($payload = $this->context->confirmBoth($source, $from, $destination, $to, $userId, $confirmedShared)) !== null) {
 			return $payload;
 		}
 		$receipt = $root->getRelativePath($source->getPath()) ?? '';
 		// Reading a locked file is allowed, so the source is not checked; files_lock may still refuse a copy between
 		// storages, and that refusal is explained.
-		$copy = NodeAccess::mutate(fn () => $this->context->locks === null ? $this->context->policy()->write($source, $to, fn (): Node => $source->copy($this->context->absolute($root, $to))) : $this->context->locks->capture(fn (): Node => $this->context->policy()->write($source, $to, fn (): Node => $source->copy($this->context->absolute($root, $to))), $source, $userId), $this->context->visibilityGuard);
-		$this->context->visibilityGuard?->assertVisible($copy);
+		$result = (new ListedTreeCopy($this->context))->execute($root, $userId, $source, $to, $manifest);
+		$copy = $result['node'];
+
 		return [
 			'from' => $receipt,
 			'to' => $to,
 			'idBefore' => (int)$source->getId(),
-			'idAfter' => (int)$copy->getId(),
+			'idAfter' => $copy === null ? null : (int)$copy->getId(),
 			'nodes' => $measured['nodes'],
 			'bytes' => $measured['bytes'],
-			'access' => $this->context->access->describe($copy, $userId),
+			'access' => $copy === null ? null : $this->context->access->describe($copy, $userId),
+			'partial' => $result['partial'],
+			'created' => $result['created'],
+			'conflicts' => $result['conflicts'],
+			'not_copied' => $result['not_copied'],
 		];
 	}
 
@@ -87,8 +94,8 @@ final class CopyHandler {
 		$to = CopyMoveContext::notBackup(PathGuard::normalize($to, 'to'));
 		$this->context->assertFree($root, $to);
 		$destination = $this->context->destination($root, $to);
-		$this->context->policy()->assertProjected($source, $to);
-		$measured = $this->context->reorganization->measure($source);
+		$manifest = (new FileTypePreflight($this->context))->inspect($source, $to, $this->context->policy()->snapshot(), true);
+		$measured = $manifest ?? $this->context->reorganization->measure($source);
 		return [
 			'action' => 'files_copy',
 			'from' => $root->getRelativePath($source->getPath()) ?? '',

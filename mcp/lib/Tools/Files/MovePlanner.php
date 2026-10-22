@@ -58,74 +58,7 @@ final class MovePlanner {
      * @throws \InvalidArgumentException for a malformed folder path
      */
     public function plan(Folder $root, string $userId, array $moves, array $mkdirs): MovePlan {
-        $this->reorganization->assertFolderMoves($root, $moves);
-        $planned = [];
-        $personal = [];
-        $conflicts = [];
-        $denied = [];
-        $shared = [];
-        $confirmation = null;
-        foreach ($moves as $item) {
-            $from = (string)$item['from'];
-            $to = (string)$item['to'];
-            try {
-                $check = $this->reorganization->inspect($root, $from, $to, mkdirs: $mkdirs);
-                // A locked item is one the run would refuse: it is listed as denied with the explanation, so the plan
-                // still shows the whole list and the batch never starts by moving half of it.
-                $this->reorganization->assertUnlocked($check->source, $userId);
-            } catch (MoveConflict $e) {
-                $conflicts[] = ['from' => $from, 'to' => $to, 'reason' => $e->getMessage()];
-                continue;
-            } catch (ToolFailure $e) {
-                $denied[] = ['from' => $from, 'to' => $to, 'reason' => $e->getMessage()];
-                continue;
-            }
-            $payload = $this->guard->guard($check->source, $userId, $from, false)
-                ?? $this->guard->guard($check->destination, $userId, $to, false);
-            // A shared item stays in the run, in its place in the order: once the user confirms the shared ones, the
-            // batch they approved is the whole list, and dropping an item would run one nobody asked for.
-            $planned[] = ['from' => $from, 'to' => $to];
-            if ($payload !== null) {
-                $shared[] = ['from' => $from, 'to' => $to, 'scope' => $payload['scope'] ?? 'shared'];
-                // The first non-personal item is the one the user is asked about; the rest are in the plan.
-                $confirmation ??= $payload;
-                continue;
-            }
-            $personal[] = ['from' => $from, 'to' => $to];
-        }
-        $dirs = $this->planDirs($root, $mkdirs);
-        // A folder made inside somebody else's share asks for the same confirmation as `files_mkdir`, whether
-        // or not a move uses it: the moves above only reach it when they land in it.
-        $sharedDirs = [];
-        foreach ($dirs as $dir) {
-            if (!$dir['willCreate']) {
-                continue;
-            }
-            $payload = $this->reorganization->guardFolder($root, $userId, $dir['path']);
-            if ($payload !== null) {
-                $sharedDirs[] = ['path' => $dir['path'], 'scope' => $payload['scope'] ?? 'shared'];
-                $confirmation ??= $payload;
-            }
-        }
-        $plan = [
-            'ok' => $conflicts === [] && $denied === [] && array_filter($dirs, fn (array $dir) => isset($dir['reason'])) === [],
-            'moves' => array_map(fn (array $item) => $item + ['ok' => true], $personal),
-            'conflicts' => $conflicts,
-            'denied' => $denied,
-            'shared' => $shared,
-            'sharedDirs' => $sharedDirs,
-            'mkdirs' => $dirs,
-            'summary' => [
-                'total' => count($moves),
-                'planned' => count($personal),
-                'conflicts' => count($conflicts),
-                'denied' => count($denied),
-                'shared' => count($shared),
-                'sharedDirs' => count($sharedDirs),
-                'mkdirs' => count(array_filter($dirs, fn (array $dir) => $dir['willCreate'])),
-            ],
-        ];
-        return new MovePlan($plan, $planned, $confirmation);
+        return (new MoveBatchPlanner($this->reorganization->copyMoveContext(), $this, $this->guard))->plan($root, $userId, $moves, $mkdirs);
     }
 
     /**
@@ -138,7 +71,7 @@ final class MovePlanner {
      * @param list<string> $paths requested folders
      * @return list<array{path:string, exists:bool, willCreate:bool, reason?:string}>
      */
-    private function planDirs(Folder $root, array $paths): array {
+    public function planDirs(Folder $root, array $paths): array {
         $dirs = [];
         foreach ($paths as $path) {
             try {

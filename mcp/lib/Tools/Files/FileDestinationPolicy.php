@@ -13,10 +13,18 @@ use OCA\Mcp\Tools\Common\PathGuard;
 use OCP\Files\File;
 use OCP\Files\Node;
 
-/** Projects a single file onto its final basename; recursive and batch preflight belongs to T15-6. */
+/** Final-name evaluator shared by single files, tree preflight and each actual native sink. */
 final class FileDestinationPolicy {
-	/** @param FileTypeGuard $guard Global policy, without a user or client bypass. */
-	public function __construct(private FileTypeGuard $guard) {
+	/**
+	 * @param FileTypeGuard $guard Global policy without a user or client bypass.
+	 * @param CopyMoveContext $context Native visibility for bounded descendant checks.
+	 */
+	public function __construct(private FileTypeGuard $guard, private CopyMoveContext $context) {
+	}
+
+	/** @return FileTypeCheck One immutable policy boundary shared by the entire preflight. */
+	public function snapshot(): FileTypeCheck {
+		return $this->guard->snapshot();
 	}
 
 	/**
@@ -33,6 +41,8 @@ final class FileDestinationPolicy {
 		if ($source instanceof File) {
 			$segments = PathGuard::segments($to);
 			($snapshot ?? $this->guard->snapshot())->assertWritableName($segments[array_key_last($segments)] ?? '');
+		} else {
+			(new FileTypePreflight($this->context))->inspect($source, $to, $snapshot ?? $this->guard->snapshot());
 		}
 	}
 

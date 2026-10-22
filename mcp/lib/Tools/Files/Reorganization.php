@@ -233,7 +233,7 @@ final class Reorganization {
      * @param string $to destination path, user-relative
      * @param string|null $etag ETag the caller read before, null to skip the check
      * @param bool $confirmedShared whether the caller passed confirm_shared
-     * @return array{from:string, to:string, idBefore:int, idAfter:int, nodes:int, bytes:int, access:array<string, mixed>}|array<string, mixed>
+     * @return array{from:string, to:string, idBefore:int, idAfter:int|null, nodes:int, bytes:int, access:array<string, mixed>|null, partial:bool, created:list<string>, conflicts:list<array{path:string,reason:string}>, not_copied:list<string>}|array<string, mixed>
      *   the receipt, or the shared-write confirmation instead of a receipt when one is still missing
      * @throws \InvalidArgumentException for a path with traversal or control characters
      * @throws ToolFailure for an occupied destination, a stale ETag, a ceiling or a denied write
@@ -266,7 +266,7 @@ final class Reorganization {
      *
      * @return CopyMoveContext The context over this operation's native checks and policy.
      */
-    private function copyMoveContext(): CopyMoveContext {
+    public function copyMoveContext(): CopyMoveContext {
         return new CopyMoveContext($this, $this->access, $this->report, $this->visibilityGuard, $this->locks, $this->fileTypes);
     }
 
@@ -379,49 +379,7 @@ final class Reorganization {
         BatchStore $store,
         int $now,
     ): array {
-        $result = $planner->plan($root, $userId, $moves, $mkdirs);
-        if (!$result->isOk()) {
-            // A folder the batch cannot create is an item without permission too: nothing of the list runs.
-            $refusedDirs = array_filter($result->plan['mkdirs'], static fn (array $dir): bool => isset($dir['reason']));
-            throw new ToolFailure(FilesMessages::batchNotOk(
-                count($result->plan['conflicts']),
-                count($result->plan['denied']) + count($refusedDirs),
-            ));
-        }
-        if ($result->confirmation !== null && !$confirmedShared) {
-            // The plan travels with the confirmation: the agent shows the user the same list either way.
-            return array_merge($result->confirmation, $result->plan);
-        }
-        $created = $this->createFolders($root, $mkdirs);
-        $moved = [];
-        foreach ($result->planned as $index => $item) {
-            try {
-                $check = $this->inspect($root, $item['from'], $item['to']);
-                FolderExposureGate::assertMove($root, $check->source, $check->to, $this->visibilityGuard);
-                $movedNode = NodeAccess::run(fn () => $this->locked(fn (): Node => $check->source->move($this->absolute($root, $check->to)), $check->source, $userId));
-                $moved[] = ['from' => $item['from'], 'to' => $check->to, 'toId' => (int)$movedNode->getId()];
-                $this->visibilityGuard?->assertVisible($movedNode);
-            } catch (\Throwable $e) {
-                $failure = $e instanceof ToolFailure ? $e->getMessage() : FilesMessages::moveFailed();
-                $batchId = $store->insert(new Batch(null, $userId, $now, $moved, $created, null));
-                $this->assertUndoVisible($root, new Batch(null, $userId, $now, $result->planned, $created, null));
-                return [
-                    'batch_id' => $batchId,
-                    'moved' => $moved,
-                    'created_dirs' => $created,
-                    'failed' => ['from' => $item['from'], 'to' => $item['to'], 'reason' => $failure],
-                    'not_attempted' => array_slice($result->planned, $index + 1),
-                ];
-            }
-        }
-        $batchId = $store->insert(new Batch(null, $userId, $now, $moved, $created, null));
-        $this->assertUndoVisible($root, new Batch(null, $userId, $now, $result->planned, $created, null));
-        return [
-            'batch_id' => $batchId,
-            'moved' => $moved,
-            'created_dirs' => $created,
-            'undos' => count($moved),
-        ];
+        return (new \OCA\Mcp\Tools\Files\Handler\MoveBatchHandler($this->copyMoveContext()))->batch($root, $userId, $moves, $mkdirs, $confirmedShared, $planner, $store, $now);
     }
     /**
      * The plan of `files_mkdir`: the levels that do not exist yet, and the folder they would be created in.
@@ -522,16 +480,7 @@ final class Reorganization {
      * @return array<string, mixed>
      */
     public function planBatch(Folder $root, string $userId, array $moves, array $mkdirs, MovePlanner $planner): array {
-        $result = $planner->plan($root, $userId, $moves, $mkdirs);
-        $plan = $result->plan;
-        unset($plan['dryRun']);
-        return [
-            'action' => 'files_move_batch',
-            'order' => array_map(static fn (array $item): array => ['from' => $item['from'], 'to' => $item['to']], $moves),
-            'undo' => 'files_undo_batch with the batch_id the run returns',
-            'requiresSharedConfirmation' => $result->confirmation !== null,
-            'message' => FilesMessages::planBatch(),
-        ] + $plan;
+        return (new \OCA\Mcp\Tools\Files\Handler\MoveBatchHandler($this->copyMoveContext()))->planBatch($root, $userId, $moves, $mkdirs, $planner);
     }
 
     /**
@@ -546,32 +495,7 @@ final class Reorganization {
      * @throws ToolFailure when the batch is not this user's, is gone, or was already undone
      */
     public function planUndoBatch(Folder $root, string $userId, int $batchId, BatchStore $store, int $now): array {
-        $batch = $store->find($batchId, $userId);
-        if ($batch === null || $batch->createdAt < $now - BatchStore::LIFETIME_SECONDS) {
-            throw new ToolFailure(FilesMessages::batchNotFound());
-        }
-        if ($batch->isUndone()) {
-            throw new ToolFailure(FilesMessages::batchAlreadyUndone());
-        }
-        $this->assertFolderMoves($root, $batch->moves, undo: true);
-        $this->assertUndoVisible($root, $batch);
-        $conflicts = $this->undoConflicts($root, $batch, $userId);
-        [$removed, $kept] = $this->emptyDirs($root, $batch);
-        return [
-            'action' => 'files_undo_batch',
-            'batch_id' => $batchId,
-            'count' => count($batch->moves),
-            'undo' => array_map(
-                static fn (array $move): array => ['to' => $move['to'], 'from' => $move['from']],
-                array_reverse($batch->moves),
-            ),
-            'removed_dirs' => $removed,
-            'kept_dirs' => $kept,
-            'conflicts' => $conflicts,
-            'ok' => $conflicts === [],
-            'recoverable' => true,
-            'message' => FilesMessages::planUndoBatch(),
-        ];
+        return (new \OCA\Mcp\Tools\Files\Handler\UndoBatchHandler($this->copyMoveContext()))->planUndoBatch($root, $userId, $batchId, $store, $now);
     }
 
 
@@ -592,79 +516,7 @@ final class Reorganization {
      * @throws ToolFailure when the batch is not this user's, is gone, or was already undone
      */
     public function undoBatch(Folder $root, string $userId, int $batchId, BatchStore $store, int $now): array {
-        $batch = $store->find($batchId, $userId);
-        // A batch of somebody else and one past its lifetime answer the same way, so nothing leaks about
-        // which ids ever existed.
-        if ($batch === null || $batch->createdAt < $now - BatchStore::LIFETIME_SECONDS) {
-            throw new ToolFailure(FilesMessages::batchNotFound());
-        }
-        if ($batch->isUndone()) {
-            throw new ToolFailure(FilesMessages::batchAlreadyUndone());
-        }
-        // Before the conflicts: they carry paths and reasons, and none may be published for a hidden item.
-        $this->assertFolderMoves($root, $batch->moves, undo: true);
-        $this->assertUndoVisible($root, $batch);
-        $conflicts = $this->undoConflicts($root, $batch, $userId);
-        if ($conflicts !== []) {
-            return ['batch_id' => $batchId, 'undone' => 0, 'removed_dirs' => [], 'kept_dirs' => [], 'conflicts' => $conflicts];
-        }
-        // A way back that lands in a folder this batch created needs that folder again, and recreating only
-        // what is actually missing keeps the undo from bringing back a folder the user emptied on purpose.
-        $this->createFolders($root, $this->missingRecordedParents($root, $batch));
-        $undone = 0;
-        foreach (array_reverse($batch->moves) as $move) {
-            try {
-                $this->assertPathsVisible($root, [$move['to'], $move['from']]);
-                $node = NodeAccess::run(fn () => NodeAccess::get($root, $move['to']));
-                FolderExposureGate::assertMove($root, $node, $move['from'], $this->visibilityGuard);
-                NodeAccess::run(fn () => $this->locked(fn (): Node => $node->move($this->absolute($root, $move['from'])), $node, $userId));
-                $undone++;
-                $this->assertPathsVisible($root, [$move['to'], $move['from']]);
-            } catch (\Throwable $e) {
-                // Every condition was checked above, so this is a lock or a permission that changed in
-                // between. The row keeps only what did not go back: an item that already moved is no longer
-                // in its destination, and leaving it there would make the next attempt read that absence as
-                // a conflict and refuse the batch for good. So the retry picks up exactly the rest. Any exception
-                // counts, as in the run of the batch: one Nextcloud has no typed answer for leaves the same state,
-                // and what it says is not repeated to the caller.
-                $store->keepRemaining($batchId, $userId, array_slice($batch->moves, 0, count($batch->moves) - $undone));
-                $this->assertUndoVisible($root, $batch);
-                return ['batch_id' => $batchId, 'undone' => $undone, 'removed_dirs' => [], 'kept_dirs' => [],
-                    'conflicts' => [['from' => $move['from'], 'to' => $move['to'],
-                        'reason' => $e instanceof ToolFailure ? $e->getMessage() : FilesMessages::moveFailed()]]];
-            }
-        }
-        // All moves have returned; a later privacy refusal must not leave them
-        // pending in the record and make every retry report absent destinations.
-        $store->keepRemaining($batchId, $userId, []);
-        $this->assertUndoVisible($root, $batch);
-        $removed = [];
-        $kept = [];
-        // Deepest first: a folder cannot go while something the undo just emptied is still inside it.
-        foreach ($this->byDepth($batch->dirs) as $dir) {
-            $this->assertPathsVisible($root, [$dir]);
-            $relative = ltrim($dir, '/');
-            if (!$root->nodeExists($relative)) {
-                continue;
-            }
-            $folder = $root->get($relative);
-            if (!$folder instanceof Folder || !$folder->isDeletable() || $folder->getDirectoryListing() !== []) {
-                $kept[] = $dir;
-                continue;
-            }
-            NodeAccess::run(fn () => NodeAccess::mutate(fn () => $folder->delete(), $this->visibilityGuard));
-            $this->assertPathsVisible($root, [$dir]);
-            $removed[] = $dir;
-        }
-        $this->assertUndoVisible($root, $batch);
-        $store->markUndone($batchId, $userId, $now);
-        return [
-            'batch_id' => $batchId,
-            'undone' => $undone,
-            'removed_dirs' => $removed,
-            'kept_dirs' => $kept,
-            'conflicts' => [],
-        ];
+        return (new \OCA\Mcp\Tools\Files\Handler\UndoBatchHandler($this->copyMoveContext()))->undoBatch($root, $userId, $batchId, $store, $now);
     }
 
     /**
@@ -678,7 +530,7 @@ final class Reorganization {
      * @param Batch $batch the batch to undo
      * @throws ToolFailure when one of those nodes is hidden or cannot be checked
      */
-    private function assertUndoVisible(Folder $root, Batch $batch): void {
+    public function assertUndoVisible(Folder $root, Batch $batch): void {
         $paths = $batch->dirs;
         foreach ($batch->moves as $move) {
             $paths[] = $move['to'];
@@ -688,7 +540,7 @@ final class Reorganization {
     }
 
     /** @param list<string> $paths paths or nearest existing ancestors to check */
-    private function assertPathsVisible(Folder $root, array $paths): void {
+    public function assertPathsVisible(Folder $root, array $paths): void {
         if ($this->visibilityGuard === null) {
             return;
         }
@@ -718,7 +570,7 @@ final class Reorganization {
      * @param string $userId authenticated user
      * @return list<array{from:string, to:string, reason:string}> the items that block the undo, empty when it may run
      */
-    private function undoConflicts(Folder $root, Batch $batch, string $userId): array {
+    public function undoConflicts(Folder $root, Batch $batch, string $userId): array {
         $conflicts = [];
         foreach (array_reverse($batch->moves) as $move) {
             try {
@@ -782,7 +634,7 @@ final class Reorganization {
      * @param Batch $batch batch being undone
      * @return array{0: list<string>, 1: list<string>} the folders to remove and the folders to keep
      */
-    private function emptyDirs(Folder $root, Batch $batch): array {
+    public function emptyDirs(Folder $root, Batch $batch): array {
         $removed = [];
         $kept = [];
         $simulatedRemoved = array_map(static fn (array $move): string => PathGuard::normalize($move['to'], 'moves'), $batch->moves);
@@ -838,7 +690,7 @@ final class Reorganization {
      * @param list<string> $paths user-relative folder paths
      * @return list<string> paths sorted by descending depth
      */
-    private function byDepth(array $paths): array {
+    public function byDepth(array $paths): array {
         $byDepth = $paths;
         usort($byDepth, fn (string $a, string $b) => substr_count($b, '/') <=> substr_count($a, '/'));
         return $byDepth;
@@ -851,7 +703,7 @@ final class Reorganization {
      * @param Batch $batch the batch being undone
      * @return list<string> the missing folders, shallowest first
      */
-    private function missingRecordedParents(Folder $root, Batch $batch): array {
+    public function missingRecordedParents(Folder $root, Batch $batch): array {
         $missing = [];
         foreach ($batch->moves as $move) {
             $segments = PathGuard::segments(PathGuard::normalize($move['from'], 'moves'));

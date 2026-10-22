@@ -24,7 +24,7 @@ final class NoFileDeletionTest extends TestCase {
      * remove an empty folder the batch itself created, and nothing else. Until that tool lands there is no
      * allowance at all, so the Files module currently has to contain no removal of any kind.
      */
-    private const ALLOWED_EMPTY_FOLDER_REMOVAL = 'lib/Tools/Files/Reorganization.php';
+    private const ALLOWED_EMPTY_FOLDER_REMOVAL = 'lib/Tools/Files/Handler/UndoBatchHandler.php';
 
     /**
      * @return list<string> every source file of the Files module

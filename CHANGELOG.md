@@ -2,6 +2,12 @@
 
 All notable changes to the native Nextcloud app (`mcp/`). Versions follow `mcp/appinfo/info.xml`.
 
+## 1.2.0 (unreleased)
+
+### File type policy — folder operations (#15)
+
+With a file type policy active, copying a folder checks every file inside it first and refuses the whole copy if any file is not allowed. The copy is then made file by file from that checked list: files another client adds or renames while the copy runs are not copied, and a failure partway leaves a partial copy that is reported and never removed. Moving a folder also checks every file inside it first, but the move itself is a single Nextcloud operation: a file another client adds to the folder in the short time between that check and the move is moved with it.
+
 ## 1.1.2
 
 Security release for servers with the **Guests** app. No database change; updating from 1.1.1 needs no step and changes nothing for accounts that are not guests.

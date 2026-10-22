@@ -144,9 +144,9 @@ final class CopyMoveFilePolicyTest extends FilesToolsTestCase {
 		}
 	}
 
-	/** A dotted folder is not evaluated as a file, and recursive coverage remains pending T15-6. */
+	/** A dotted folder is not evaluated as a file; T15-6 evaluates its file descendants. */
 	public function testFoldersKeepTheirExistingBehavior(): void {
-		CopyMovePolicyFixture::forTest($this)->value = ['version' => 99];
+		CopyMovePolicyFixture::forTest($this)->value = self::policy();
 		$this->plan('files_move', ['from' => '/folder.php', 'to' => '/folder.exe']);
 		$this->json('files_move', ['from' => '/folder.php', 'to' => '/folder.exe']);
 		self::assertArrayHasKey('/alice/files/folder.exe', $this->tree->nodes);

@@ -121,7 +121,8 @@ final class TasksModule implements ToolModule, PreviewsWrites, ToolGuideNotes, R
                         'description' => 'Include completed tasks.',
                     ],
                     'category' => Schema::text(
-                        'Only list tasks with this category, compared exactly but ignoring case.',
+                        'Only list tasks with this category, compared exactly but ignoring case. '
+                            . 'Omit the field to apply no category filter; the value is not a pattern.',
                         1,
                         TaskData::MAX_CATEGORY_LENGTH
                     ),
@@ -284,13 +285,16 @@ final class TasksModule implements ToolModule, PreviewsWrites, ToolGuideNotes, R
                     $items[] = $item + ['etag' => $row['etag'], 'calendar' => $calendar->path];
                 }
             }
-            return ToolResult::json(
-                [
-                    'tasks' => $items,
-                    'hasMore' => $more,
-                    'nextOffset' => $more ? $offset + count($items) : null,
-                ]
-            );
+            $page = [
+                'tasks' => $items,
+                'hasMore' => $more,
+                'nextOffset' => $more ? $offset + count($items) : null,
+            ];
+            // A filter without a single match reads exactly like an empty calendar; the note tells them apart.
+            if (isset($arguments['category']) && $matched === 0) {
+                $page['note'] = (new CategoryFilterNote())->forMiss($arguments['category'], ($arguments['include_completed'] ?? false) === true);
+            }
+            return ToolResult::json($page);
         }
         $prepared = $this->prepare($name, $arguments, $userId);
         if (!WriteGate::confirmed($arguments)) {

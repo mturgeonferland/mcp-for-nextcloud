@@ -1367,6 +1367,9 @@
     "Native Deck dependency reading is unavailable on this installation." : "La lectura de dependencias nativas de Deck no está disponible en esta instalación.",
     "The readable dependency graph exceeds the traversal limits. No incomplete graph was returned." : "El grafo de dependencias legible supera los límites del recorrido. No se devolvió un grafo incompleto.",
     "This graph contains only readable cards. Cycles through unreadable cards cannot be detected; a visible graph does not prove that the global graph is acyclic. Native relations do not automatically block task progress." : "Este grafo contiene solo tarjetas legibles. No se pueden detectar ciclos a través de tarjetas ilegibles; un grafo visible no demuestra que el grafo global sea acíclico. Las relaciones nativas no bloquean automáticamente el progreso de las tareas.",
-    "Read Deck card dependencies" : "Leer dependencias de la tarjeta de Deck"
+    "Read Deck card dependencies" : "Leer dependencias de la tarjeta de Deck",
+    "No visible task checked in this list has the category %s. Omit the category field to remove the category filter." : "Ninguna tarea visible consultada en esta lista tiene la categoría %s. Omita el campo de categoría para quitar el filtro de categoría.",
+    "Completed tasks were not checked. Set include_completed to true to include them." : "No se consultaron las tareas completadas. Establezca include_completed en true para incluirlas.",
+    "It has no letter or digit, so it looks like a placeholder rather than a real label." : "No tiene ninguna letra ni dígito, así que parece un marcador de posición y no una etiqueta real."
 },"pluralForm" :"nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;"
 }

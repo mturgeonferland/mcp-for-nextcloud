@@ -1364,6 +1364,9 @@ OC.L10N.register(
     "Native Deck dependency reading is unavailable on this installation." : "Das Lesen nativer Deck-Abhängigkeiten ist auf dieser Installation nicht verfügbar.",
     "The readable dependency graph exceeds the traversal limits. No incomplete graph was returned." : "Der lesbare Abhängigkeitsgraph überschreitet die Durchlaufgrenzen. Es wurde kein unvollständiger Graph zurückgegeben.",
     "This graph contains only readable cards. Cycles through unreadable cards cannot be detected; a visible graph does not prove that the global graph is acyclic. Native relations do not automatically block task progress." : "Dieser Graph enthält nur lesbare Karten. Zyklen über nicht lesbare Karten können nicht erkannt werden; ein sichtbarer Graph beweist nicht, dass der globale Graph azyklisch ist. Native Beziehungen blockieren den Aufgabenfortschritt nicht automatisch.",
-    "Read Deck card dependencies" : "Abhängigkeiten der Deck-Karte lesen"
+    "Read Deck card dependencies" : "Abhängigkeiten der Deck-Karte lesen",
+    "No visible task checked in this list has the category %s. Omit the category field to remove the category filter." : "Keine in dieser Liste geprüfte sichtbare Aufgabe hat die Kategorie %s. Lassen Sie das Kategoriefeld weg, um den Kategoriefilter zu entfernen.",
+    "Completed tasks were not checked. Set include_completed to true to include them." : "Erledigte Aufgaben wurden nicht geprüft. Setzen Sie include_completed auf true, um sie einzubeziehen.",
+    "It has no letter or digit, so it looks like a placeholder rather than a real label." : "Sie enthält weder Buchstaben noch Ziffern und wirkt daher eher wie ein Platzhalter als wie ein echtes Label."
 },
 "nplurals=2; plural=(n != 1);");

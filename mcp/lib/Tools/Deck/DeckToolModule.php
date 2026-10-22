@@ -133,6 +133,9 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 			'deck_move_card only changes the position inside the list of the card; moving it to another list or another '
 				. 'board is not something this module does.',
 		];
+		foreach (DeckGuideNotes::lines() as $note) {
+			$notes[] = $note;
+		}
 		if ($this->dependencyCapabilities()->dependencies()) {
 			$notes[] = DeckMessages::TOOL_READ_DEPENDENCIES_DESCRIPTION;
 		}

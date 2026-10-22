@@ -19,7 +19,7 @@ final class CardLinkMessages {
 	 * @return string Localized strict-policy refusal.
 	 */
 	public static function refused(): string {
-		return Translator::t('This file cannot be linked under the current sharing policies. Check whether sharing is disabled globally or for your groups, group sharing or resharing is disabled, or Guests, group-only sharing, mandatory internal expiry or unsupported recipients prevent linking.');
+		return Translator::t('This file cannot be linked under the current sharing rules. The link is refused for a Guest, for group-only sharing, when group sharing is off and the board includes a group or a team, when internal expiry is mandatory, when sharing or resharing is off, or when a recipient is not a fully resolved local user, group or team. The same answer is used when those facts cannot be read. Nothing here asks you to change a setting or to sign in another way.');
 	}
 
 	/**
@@ -37,7 +37,7 @@ final class CardLinkMessages {
 	 * @return string Localized mandatory plan warning.
 	 */
 	public static function warning(): string {
-		return Translator::t('Linking grants read-only access (READ=1) to all current board members shown in this plan. Future board, group and team members can also read the file. Unlinking revokes this link for everyone; independent shares may keep access. Policies enabled later and membership changes are not automatically enforced or revoked. Checks and hashes do not make linking atomic, and the server does not attest human consent.');
+		return Translator::t('Linking grants read-only access (READ=1) to all current board members shown in this plan. Future board, group and team members can also read the file. Unlinking revokes this link for everyone; independent shares may keep access. A policy enabled after the link, and a later change of board, group or team membership, are not corrected and the link is not revoked automatically. The check is not atomic: access can still change between the last check and the native share. Hashes do not close that gap, and the server does not attest human consent.');
 	}
 
 	/**
@@ -46,7 +46,8 @@ final class CardLinkMessages {
 	 * @return string Localized uncertain-result instruction.
 	 */
 	public static function uncertain(): string {
-		return Translator::t('The file link outcome is uncertain. Inspect the card in Deck before retrying; a visible association alone does not prove which request created it.');
+		return Translator::t('The file link outcome is uncertain. Inspect the card in Deck before retrying; a visible association alone does not prove which request created it.')
+			. ' ' . DeckMessages::doesNotProveTheWholeRequest();
 	}
 
 	/**

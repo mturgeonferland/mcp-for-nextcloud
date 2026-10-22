@@ -9,6 +9,7 @@ namespace OCA\Mcp\Tools\Deck;
 
 use OCA\Mcp\Service\Scope\FilesAccessGuard;
 use OCP\Files\File;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 
@@ -29,7 +30,7 @@ final class CardFileNodeAccess {
 	/**
 	 * Resolve a File only after callers admitted their operation's grants and scope.
 	 *
-	 * A clean alias cannot bypass a hidden alias. No folder, absent or hidden identity is distinguished.
+	 * A clean alias cannot bypass a hidden alias. A folder is named only after every alias is a folder that is visible, readable and the expected id. Any other alias stays on the same refusal as a missing file.
 	 *
 	 * @param string $uid Authenticated caller.
 	 * @param int $fileId Stable original node identity.
@@ -50,6 +51,9 @@ final class CardFileNodeAccess {
 		foreach ($nodes as $node) {
 			if (!$node instanceof File || !$this->guard->isVisible($node) || !$node->isReadable()
 				|| (int)$node->getId() !== $fileId || ($share && !$node->isShareable())) {
+				if ($this->onlyAuthorizedFolders($nodes, $fileId)) {
+					throw new DeckRefusalException(DeckMessages::fileFolderRefused());
+				}
 				throw CardFiles::unavailable();
 			}
 		}
@@ -61,5 +65,28 @@ final class CardFileNodeAccess {
 		}
 		return ['node' => $node, 'metadata' => ['fileId' => $fileId, 'name' => $node->getName(), 'path' => $path,
 			'size' => (int)$node->getSize(), 'etag' => $node->getEtag(), 'owner' => $node->getOwner()?->getUID() ?? '']];
+	}
+
+	/**
+	 * Name a folder only after visibility, native READ and the expected id hold for every alias.
+	 *
+	 * A hidden folder, an unreadable folder, a different id, a file and a mixed set return false.
+	 * The caller then uses the same refusal as a missing file.
+	 *
+	 * @param list<\OCP\Files\Node> $nodes Aliases returned for one file id in the caller's tree.
+	 * @param int $fileId Stable original node identity requested by the caller.
+	 * @return bool True only when every alias is a folder the caller can already read at that id.
+	 */
+	private function onlyAuthorizedFolders(array $nodes, int $fileId): bool {
+		if ($nodes === []) {
+			return false;
+		}
+		foreach ($nodes as $node) {
+			if (!$node instanceof Folder || !$this->guard->isVisible($node) || !$node->isReadable()
+				|| (int)$node->getId() !== $fileId) {
+				return false;
+			}
+		}
+		return true;
 	}
 }

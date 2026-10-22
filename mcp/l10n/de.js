@@ -1395,6 +1395,9 @@ OC.L10N.register(
     "Read Deck card dependencies" : "Abhängigkeiten der Deck-Karte lesen",
     "No visible task checked in this list has the category %s. Omit the category field to remove the category filter." : "Keine in dieser Liste geprüfte sichtbare Aufgabe hat die Kategorie %s. Lassen Sie das Kategoriefeld weg, um den Kategoriefilter zu entfernen.",
     "Completed tasks were not checked. Set include_completed to true to include them." : "Erledigte Aufgaben wurden nicht geprüft. Setzen Sie include_completed auf true, um sie einzubeziehen.",
-    "It has no letter or digit, so it looks like a placeholder rather than a real label." : "Sie enthält weder Buchstaben noch Ziffern und wirkt daher eher wie ein Platzhalter als wie ein echtes Label."
+    "It has no letter or digit, so it looks like a placeholder rather than a real label." : "Sie enthält weder Buchstaben noch Ziffern und wirkt daher eher wie ein Platzhalter als wie ein echtes Label.",
+    "This file type cannot be written through MCP. Ask an administrator to review the file type policy." : "Dieser Dateityp kann nicht über MCP geschrieben werden. Bitten Sie einen Administrator, die Dateityprichtlinie zu prüfen.",
+    "The MCP file type policy is unavailable. Ask an administrator to review its settings." : "Die MCP-Dateityprichtlinie ist nicht verfügbar. Bitten Sie einen Administrator, die Einstellungen zu prüfen.",
+    "Invalid file type policy settings." : "Ungültige Einstellungen für die Dateityprichtlinie."
 },
 "nplurals=2; plural=(n != 1);");

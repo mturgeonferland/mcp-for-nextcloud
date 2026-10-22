@@ -1,6 +1,7 @@
 OC.L10N.register(
     "mcp",
     {
+    "The operation would exceed %s items; nothing was changed." : "La operación superaría los %s elementos; no se ha cambiado nada.",
     "The specified snippet appears more than once in the file; provide a longer, unique snippet." : "El fragmento indicado aparece más de una vez en el archivo; indique un fragmento más largo y único.",
     "Use only one of content, append or old/new." : "Use solo uno de content, append u old/new.",
     "append and old/new need the etag returned by notes_read or by the plan." : "append y old/new requieren el etag que devuelve notes_read o el plan.",

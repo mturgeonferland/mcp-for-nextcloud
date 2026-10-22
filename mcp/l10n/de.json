@@ -1,4 +1,5 @@
 { "translations": {
+    "The operation would exceed %s items; nothing was changed." : "Der Vorgang würde mehr als %s Elemente umfassen; es wurde nichts geändert.",
     "The specified snippet appears more than once in the file; provide a longer, unique snippet." : "Der angegebene Textausschnitt kommt mehrmals in der Datei vor. Gib einen längeren, eindeutigen Ausschnitt an.",
     "Use only one of content, append or old/new." : "Verwende nur eines von content, append oder old/new.",
     "append and old/new need the etag returned by notes_read or by the plan." : "append und old/new brauchen den ETag, den notes_read oder der Plan liefert.",

@@ -15,6 +15,11 @@ final class FileTypeCheck {
 	public function __construct(private readonly array $policy) {
 	}
 
+	/** @return bool Whether this boundary requires file type enforcement and bounded descendant preflight. */
+	public function isActive(): bool {
+		return $this->policy['mode'] !== 'off';
+	}
+
 	/**
 	 * Evaluate a basename without reading or invalidating any configuration cache.
 	 *

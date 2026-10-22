@@ -44,7 +44,7 @@ final class CopyMoveContext {
 	 * @return FileDestinationPolicy Final-name preflight and sink checks.
 	 */
 	public function policy(): FileDestinationPolicy {
-		return new FileDestinationPolicy($this->fileTypes ?? \OCP\Server::get(FileTypeGuard::class));
+		return new FileDestinationPolicy($this->fileTypes ?? \OCP\Server::get(FileTypeGuard::class), $this);
 	}
 
 	/**

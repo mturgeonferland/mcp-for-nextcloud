@@ -1,6 +1,9 @@
 OC.L10N.register(
     "mcp",
     {
+    "This file type cannot be written through MCP. Ask an administrator to review the file type policy." : "Este tipo de arquivo não pode ser gravado pelo MCP. Peça ao administrador para verificar a política de tipos de arquivo.",
+    "The MCP file type policy is unavailable. Ask an administrator to review its settings." : "A política de tipos de arquivo do MCP está indisponível. Peça ao administrador para verificar suas configurações.",
+    "Invalid file type policy settings." : "Configurações inválidas da política de tipos de arquivo.",
     "person" : "pessoa",
     "group" : "grupo",
     "Read only" : "Somente leitura",

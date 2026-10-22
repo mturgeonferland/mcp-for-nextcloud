@@ -1,4 +1,7 @@
 { "translations": {
+    "This file type cannot be written through MCP. Ask an administrator to review the file type policy." : "Dieser Dateityp kann nicht über MCP geschrieben werden. Bitten Sie einen Administrator, die Dateityprichtlinie zu prüfen.",
+    "The MCP file type policy is unavailable. Ask an administrator to review its settings." : "Die MCP-Dateityprichtlinie ist nicht verfügbar. Bitten Sie einen Administrator, die Einstellungen zu prüfen.",
+    "Invalid file type policy settings." : "Ungültige Einstellungen für die Dateityprichtlinie.",
     "person" : "Person",
     "group" : "Gruppe",
     "Read only" : "Nur lesen",

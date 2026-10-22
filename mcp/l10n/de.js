@@ -523,7 +523,6 @@ OC.L10N.register(
     "The specified path is not a file." : "Der angegebene Pfad ist keine Datei.",
     "The specified path is not a folder." : "Der angegebene Pfad ist kein Ordner.",
     "The specified path is not an image file." : "Der angegebene Pfad ist keine Bilddatei.",
-    "The specified snippet appears %s times in the file; provide a unique snippet." : "Der angegebene Textausschnitt kommt %s-mal in der Datei vor. Gib einen eindeutigen Ausschnitt an.",
     "The specified snippet does not appear in the file." : "Der angegebene Textausschnitt kommt in der Datei nicht vor.",
     "The specified snippet is not valid UTF-8; send it exactly as it appears in the file." : "Der angegebene Textausschnitt ist kein gültiges UTF-8. Sende ihn exakt wie in der Datei.",
     "The task could not be read safely." : "Die Aufgabe konnte nicht sicher gelesen werden.",

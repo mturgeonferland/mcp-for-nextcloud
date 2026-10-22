@@ -654,7 +654,6 @@
     "The specified path is not a file." : "La ruta indicada no es un archivo.",
     "The specified path is not a folder." : "La ruta indicada no es una carpeta.",
     "The specified path is not an image file." : "La ruta indicada no es un archivo de imagen.",
-    "The specified snippet appears %s times in the file; provide a unique snippet." : "El fragmento indicado aparece %s veces en el archivo; indique un fragmento único.",
     "The specified snippet does not appear in the file." : "El fragmento indicado no aparece en el archivo.",
     "The specified snippet is not valid UTF-8; send it exactly as it appears in the file." : "El fragmento indicado no es UTF-8 válido; envíelo exactamente como aparece en el archivo.",
     "The task could not be read safely." : "No se pudo leer la tarea de forma segura.",

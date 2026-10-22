@@ -53,6 +53,7 @@ final class FileCreation {
         private FilesAccessGuard $visibilityGuard,
         private LoggerInterface $logger,
         private LockAwareWrite $locks,
+        private ?\OCA\Mcp\Tools\Common\FileTypeGuard $fileTypes = null,
     ) {}
 
     /**
@@ -214,6 +215,7 @@ final class FileCreation {
             }
             throw new FileExists(FilesMessages::fileExists());
         }
+        FileWriteBoundary::check($this->fileTypes, $name);
         return ['path' => $path, 'name' => $name, 'folderPath' => $folderPath, 'folder' => $folder];
     }
 
@@ -243,41 +245,7 @@ final class FileCreation {
      * @throws ToolFailure with the message of a lock ({@see \OCA\Mcp\Tools\Common\LockWriteFailure}) or a full quota, or {@see FilesMessages::createFailed()}
      */
     public function write(Folder $folder, string $name, mixed $content, ?string $userId = null, bool $asUser = true): File {
-        if ($folder->nodeExists($name)) {
-            throw new FileExists(FilesMessages::fileExists());
-        }
-        try {
-            $file = NodeAccess::requireFile(NodeAccess::mutate(fn () => $folder->newFile($name), $this->visibilityGuard));
-        } catch (InvalidPathException) {
-            throw self::invalidName();
-        }
-        $this->visibilityGuard->assertVisible($file);
-        if ((int)$file->getSize() > 0) {
-            throw new FileExists(FilesMessages::fileExists());
-        }
-        if ($content === '') {
-            return $file;
-        }
-        $created = [(int)$file->getId(), (string)$file->getEtag()];
-        $current = NodeAccess::requireFile($folder->get($name));
-        if ([(int)$current->getId(), (string)$current->getEtag()] !== $created || (int)$current->getSize() > 0) {
-            throw new FileExists(FilesMessages::fileExists());
-        }
-        try {
-            $put = static fn () => $current->putContent($content);
-            NodeAccess::mutate(fn () => $userId === null ? $put() : $this->locks->run($put, $current, $userId, null, $asUser), $this->visibilityGuard);
-        } catch (ToolFailure $e) {
-            // Already a readable refusal: a lock found by the check, or one the storage raised, explained.
-            throw $e;
-        } catch (LockedException|NotEnoughSpaceException $e) {
-            // The two failures the agent can act on keep the message NodeAccess::run() gives them everywhere else.
-            NodeAccess::run(static fn () => throw $e);
-        } catch (\Throwable $e) {
-            // Only the class: the message of a storage exception may carry the path.
-            $this->logger->error('MCP new file write failed', ['app' => 'mcp', 'exception_class' => $e::class]);
-            throw new ToolFailure(FilesMessages::createFailed());
-        }
-        return $current;
+        return (new FileCreationWriter($this->visibilityGuard, $this->logger, $this->locks, $this->fileTypes))->write($folder, $name, $content, $userId, $asUser);
     }
 
     /**

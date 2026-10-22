@@ -509,7 +509,7 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
      * @param string $new replacement text
      * @param string|null $etag ETag the caller read before, null to skip the check
      * @return array<string, mixed>
-     * @throws ToolFailure when the snippet is absent or ambiguous, or the write would be refused
+     * @throws ToolFailure when the file is over the read ceiling, the snippet is absent or ambiguous, or the write would be refused
      */
     private function planReplace(Folder $root, string $userId, string $path, string $old, string $new, ?string $etag): array {
         $path = PathGuard::normalize($path);
@@ -520,7 +520,7 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
         UniqueSnippet::assertText($old);
         $file = $this->file($root, $path);
         NodeAccess::checkEtag($file, $etag);
-        $raw = (string)$file->getContent();
+        $raw = ReplaceSource::read($file);
         $updated = UniqueSnippet::replace($raw, $old, $new);
 
         return $this->planContent($file, $userId, $path, [
@@ -878,7 +878,7 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
      * @param string|null $etag ETag the caller read before, null to skip the check
      * @param bool $confirmed whether the caller passed confirm_shared
      * @return array{content: list<array{type:string, text:string}>}
-     * @throws ToolFailure when the snippet is absent or ambiguous, or the write is refused
+     * @throws ToolFailure when the file is over the read ceiling, the snippet is absent or ambiguous, or the write is refused
      */
     private function replace(Folder $root, string $userId, string $path, string $old, string $new, ?string $etag, bool $confirmed): array {
         $path = PathGuard::normalize($path);
@@ -892,7 +892,7 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
         if (($payload = $this->guard->guard($file, $userId, $path, $confirmed)) !== null) {
             return ToolResult::json($payload);
         }
-        $raw = (string)$file->getContent();
+        $raw = ReplaceSource::read($file);
         $updated = UniqueSnippet::replace($raw, $old, $new);
         return ToolResult::json($this->commit($root, $userId, $file, $path, $updated, $etag, $this->extractor->extract($file)));
     }

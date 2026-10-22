@@ -21,6 +21,7 @@ final class SourceParser {
         'OC\\' => 'lib/private/',
         'OCA\\DAV\\' => 'apps/dav/lib/',
         'OCA\\Deck\\' => 'apps/deck/lib/',
+        'OCA\\Circles\\' => 'apps/circles/lib/',
         'OCA\\Talk\\' => 'apps/spreed/lib/',
         'OCA\\Files_Versions\\' => 'apps/files_versions/lib/',
         'OCA\\Files_Trashbin\\' => 'apps/files_trashbin/lib/',

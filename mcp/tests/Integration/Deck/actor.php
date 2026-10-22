@@ -54,6 +54,15 @@ function cardReadable(CardService $cards, int $id): bool {
     try { $cards->find($id); return true; }
     catch (OCA\Deck\NoPermissionException $e) { return false; }
 }
+if (str_starts_with($action, 'recipient-')) {
+    try {
+        echo json_encode(OCA\Mcp\Tests\Integration\Deck\BoardRecipientFixture::run($uid, $action, $in), JSON_THROW_ON_ERROR);
+    } catch (Throwable $failure) {
+        fwrite(STDERR, (string)$failure);
+        exit(1);
+    }
+    exit;
+}
 if (str_starts_with($action, 'guest-')) {
     echo json_encode(OCA\Mcp\Tests\Integration\Guests\GuestDeckParityFixture::run($uid, $action, $in), JSON_THROW_ON_ERROR);
     exit;

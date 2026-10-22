@@ -100,11 +100,17 @@ final class NextcloudApiContractTest extends TestCase {
         }
     }
 
-    /** The fixtures come from the oldest release of each major covered; for Deck and Talk, the oldest one checks the minimums the app enforces. */
+    /**
+     * Verify original minimum releases and the exact official recipient source provenance per major.
+     *
+     * @return void
+     */
     public function testFixturesWereGeneratedFromTheOldestCoveredReleases(): void {
         foreach (NextcloudApiUsage::SOURCES as $major => $sources) {
             $this->assertSame($sources, self::fixture((string)$major)['sources'], "fixture $major");
             $this->assertStringStartsWith($major . '.', $sources['server']);
+            $recipientPins = json_decode(file_get_contents(self::FIXTURES . '/recipient-sources.json'), true, 512, JSON_THROW_ON_ERROR);
+            $this->assertSame($recipientPins[$major], self::fixture((string)$major)['recipientSources'], "recipient fixture $major");
         }
         $oldest = NextcloudApiUsage::SOURCES[self::checkedMajors()[0]];
         foreach (AppEnablement::MINIMUM_VERSIONS as $app => $minimum) {

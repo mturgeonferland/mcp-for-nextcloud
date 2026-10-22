@@ -31,6 +31,9 @@ final class DeckCardFileGateway {
 
 	/**
 	 * Fresh native parent context for file reads/writes; no native attachment metadata/count is returned.
+	 *
+	 * An inactive marker binds this native context only after READ and EDIT have both succeeded.
+	 *
 	 * @param string $userId Authenticated caller.
 	 * @param int $cardId Source card.
 	 * @param bool $edit Require EDIT and active card/board for a mutation.
@@ -47,7 +50,7 @@ final class DeckCardFileGateway {
 		if ($edit) {
 			$this->services->get(PermissionService::class)->checkPermission($this->services->get(CardMapper::class), $cardId, Acl::PERMISSION_EDIT);
 			if ($source['card']->getArchived() || $board->getArchived()) {
-				throw new DeckRefusalException(DeckMessages::fileSourceInactive());
+				throw DeckRefusalException::inactiveFileSource($userId, $cardId, $source['boardId']);
 			}
 		}
 		$owner = (string)$board->getOwner();

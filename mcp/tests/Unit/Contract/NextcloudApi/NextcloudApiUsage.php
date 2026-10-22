@@ -45,6 +45,7 @@ final class NextcloudApiUsage {
      * {@see \OCA\Mcp\Tools\Calendar\EmbeddedDavDispatcher} detaches.
      */
     public const EXTRA_CLASSES = [
+        'OCA\\Circles\\Model\\Circle',
         'OCA\\Talk\\Participant',
         'OCP\\FilesMetadata\\Model\\IFilesMetadata',
         'OCA\\DAV\\CalDAV\\Schedule\\Plugin',
@@ -59,6 +60,20 @@ final class NextcloudApiUsage {
      * @var array<string, list<string>>
      */
     public const POSITIONAL = [
+        'OCP\\IGroup::count' => [],
+        // BoardRecipientResolver authorizes the source before DeckRecipientDirectory reads complete native ACLs/readers.
+        'OCA\\Deck\\Db\\AclMapper::findAll' => ['boardId'],
+        'OCA\\Deck\\Service\\CirclesService::getCircle' => ['circleId'],
+        'OCA\\Circles\\Model\\Circle::getInheritedMembers' => ['detailed'],
+        'OCA\\Circles\\Model\\Circle::isLocal' => [],
+        'OCA\\Circles\\Model\\Circle::getSingleId' => [],
+        'OCA\\Circles\\Model\\Member::getUserId' => [],
+        'OCA\\Circles\\Model\\Member::getSingleId' => [],
+        'OCA\\Circles\\Model\\Member::getBasedOn' => [],
+        'OCA\\Circles\\Model\\Member::getUserType' => [],
+        'OCA\\Circles\\Model\\Member::getLevel' => [],
+        'OCA\\Circles\\Model\\Member::isLocal' => [],
+        'OCA\\Deck\\Service\\CirclesService::isCirclesEnabled' => [],
         // Fresh native administration follows the manager's public optional backend contract.
         'OCP\\Group\\Backend\\IIsAdminBackend::isAdmin' => ['uid'],
         // Talk, held untyped by OCA\Mcp\Tools\Talk.
@@ -150,6 +165,14 @@ final class NextcloudApiUsage {
      * @var array<string, array<string, string>> "Class::method" => parameter => why its default is right
      */
     public const REVIEWED_TRAILING = [
+        'OCP\\IGroup::count' => ['search' => '"": estimate the entire group; false/zero/subcounts do not replace post-load limits'],
+        'OCA\\Deck\\Db\\AclMapper::findAll' => [
+            'limit' => 'null: complete authorized board ACLs, bounded after loading',
+            'offset' => 'null: every row, never a partial page',
+        ],
+        'OCA\\Circles\\Model\\Circle::getInheritedMembers' => [
+            'remote' => 'false: native local inheritance; any returned effective non-local identity refuses',
+        ],
         'OCA\\Talk\\Manager::getRoomForUserByToken' => [
             'sessionId' => 'null: the module reads no session, it never joins the room',
             'includeLastMessage' => 'false: the last message is not part of what the module answers',
@@ -269,6 +292,7 @@ final class NextcloudApiUsage {
 
     /** Constants the app reads by name from classes it holds untyped. */
     public const CONSTANTS = [
+        'OCA\\Circles\\Model\\Member' => ['LEVEL_MEMBER', 'TYPE_USER', 'TYPE_GROUP', 'TYPE_CIRCLE'],
         'OCA\\Talk\\Model\\Attendee' => ['ACTOR_USERS', 'PERMISSIONS_CHAT', 'PERMISSIONS_LOBBY_IGNORE'],
         'OCA\\Talk\\Room' => ['READ_ONLY', 'TYPE_CHANGELOG', 'TYPE_GROUP'],
         'OCA\\Talk\\Webinary' => ['LOBBY_NONE'],
@@ -356,6 +380,7 @@ final class NextcloudApiUsage {
      * @var array<string, string> "Class::method" => the call it really is
      */
     public const NAME_CLASHES = [
+        'OCA\\Deck\\Service\\PermissionService::getUserId' => 'OCA\\Circles\\Model\\Member::getUserId, in Tools/Deck/DeckRecipientDirectory',
         'OCP\\Files\\Node::getLastActivity' => 'OCA\\Talk\\Room::getLastActivity, in Tools/Talk/ConversationReader',
         'OCP\\Files\\File::getLastActivity' => 'OCA\\Talk\\Room::getLastActivity, in Tools/Talk/ConversationReader',
         'OCP\\Files\\Folder::getLastActivity' => 'OCA\\Talk\\Room::getLastActivity, in Tools/Talk/ConversationReader',

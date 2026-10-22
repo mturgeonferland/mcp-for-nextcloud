@@ -19,6 +19,54 @@ use RuntimeException;
  * it could not be taken back: its message says the item is in the Deck trash.
  */
 final class DeckRefusalException extends RuntimeException {
+	/**
+	 * UID whose source READ and EDIT were checked by the native file gateway.
+	 *
+	 * @var string|null No user-controlled text can initialize this marker.
+	 */
+	private ?string $inactiveSourceUid = null;
+	/**
+	 * Native card whose source READ and EDIT preceded the inactive marker.
+	 *
+	 * @var int|null Internal binding, never serialized or logged.
+	 */
+	private ?int $inactiveSourceCardId = null;
+	/**
+	 * Native board observed during the same authorized source read.
+	 *
+	 * @var int|null Internal binding, never serialized or logged.
+	 */
+	private ?int $inactiveSourceBoardId = null;
+
+	/**
+	 * Mark an inactive file source only after the gateway checked READ and EDIT.
+	 *
+	 * @param string $uid Authenticated native caller.
+	 * @param int $cardId Authorized source card.
+	 * @param int $boardId Native board observed by that authorized read.
+	 * @return self Sanitized refusal with a private context marker.
+	 */
+	public static function inactiveFileSource(string $uid, int $cardId, int $boardId): self {
+		$failure = new self(DeckMessages::fileSourceInactive());
+		$failure->inactiveSourceUid = $uid;
+		$failure->inactiveSourceCardId = $cardId;
+		$failure->inactiveSourceBoardId = $boardId;
+		return $failure;
+	}
+
+	/**
+	 * Recognize only a source marker tied to this exact authenticated context.
+	 *
+	 * @param string $uid Expected authenticated caller.
+	 * @param int $cardId Expected source card.
+	 * @param int $boardId Expected source board.
+	 * @return bool Whether the private marker has this exact binding.
+	 */
+	public function marksInactiveFileSource(string $uid, int $cardId, int $boardId): bool {
+		return $this->inactiveSourceUid === $uid && $this->inactiveSourceCardId === $cardId
+			&& $this->inactiveSourceBoardId === $boardId;
+	}
+
 	/** Whether the item was deleted after all: the `*ReceivedCards(false)` pair, whose undo failed. */
 	private bool $afterWrite = false;
 

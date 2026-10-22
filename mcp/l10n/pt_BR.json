@@ -1,4 +1,7 @@
 { "translations": {
+    "The board recipients could not be fully resolved. Check the board sharing and group or team membership before trying again." : "Não foi possível resolver todos os destinatários do quadro. Confira o compartilhamento do quadro e os membros dos grupos ou equipes antes de tentar novamente.",
+    "The board has unsupported recipients. Only fully resolved local users, groups and teams are supported; email, contact and remote recipients prevent linking a file." : "O quadro possui destinatários não suportados. Apenas usuários locais, grupos e equipes totalmente resolvidos são suportados; destinatários de e-mail, contato e remotos impedem o vínculo de arquivos.",
+    "The board recipients exceed the supported resolution limits. No partial recipient count is available. Reduce the board audience or try again later." : "Os destinatários do quadro excedem os limites de resolução suportados. Não há contagem parcial disponível. Reduza o público do quadro ou tente novamente mais tarde.",
     "List Deck card files" : "Listar arquivos do card do Deck",
     "Unlink Deck card file" : "Desvincular arquivo do card do Deck",
     "Unlink %s from Deck card %s." : "Desvincular %s do card do Deck %s.",

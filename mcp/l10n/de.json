@@ -1,4 +1,7 @@
 { "translations": {
+    "The board recipients could not be fully resolved. Check the board sharing and group or team membership before trying again." : "Die Empfänger des Boards konnten nicht vollständig ermittelt werden. Prüfen Sie die Board-Freigaben und die Gruppen- oder Teammitglieder, bevor Sie es erneut versuchen.",
+    "The board has unsupported recipients. Only fully resolved local users, groups and teams are supported; email, contact and remote recipients prevent linking a file." : "Das Board hat nicht unterstützte Empfänger. Unterstützt werden nur vollständig ermittelte lokale Benutzer, Gruppen und Teams; E-Mail-, Kontakt- und entfernte Empfänger verhindern das Verknüpfen einer Datei.",
+    "The board recipients exceed the supported resolution limits. No partial recipient count is available. Reduce the board audience or try again later." : "Die Empfänger des Boards überschreiten die unterstützten Ermittlungsgrenzen. Es ist keine Teilanzahl verfügbar. Verkleinern Sie den Empfängerkreis des Boards oder versuchen Sie es später erneut.",
     "List Deck card files" : "Dateien der Deck-Karte auflisten",
     "Unlink Deck card file" : "Dateiverknüpfung der Deck-Karte entfernen",
     "Unlink %s from Deck card %s." : "Verknüpfung von %s mit der Deck-Karte %s entfernen.",

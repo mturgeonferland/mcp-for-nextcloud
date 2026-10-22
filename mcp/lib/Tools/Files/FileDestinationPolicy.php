@@ -1,0 +1,52 @@
+<?php
+/*
+ * SPDX-FileCopyrightText: 2026 Sintax (Jhonatan Jaworski) <contato@sintax.tech>
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+declare(strict_types=1);
+
+namespace OCA\Mcp\Tools\Files;
+
+use OCA\Mcp\Tools\Common\FileTypeCheck;
+use OCA\Mcp\Tools\Common\FileTypeGuard;
+use OCA\Mcp\Tools\Common\PathGuard;
+use OCP\Files\File;
+use OCP\Files\Node;
+
+/** Projects a single file onto its final basename; recursive and batch preflight belongs to T15-6. */
+final class FileDestinationPolicy {
+	/** @param FileTypeGuard $guard Global policy, without a user or client bypass. */
+	public function __construct(private FileTypeGuard $guard) {
+	}
+
+	/**
+	 * Check a resolved destination, optionally sharing a caller's immutable preflight snapshot.
+	 *
+	 * @param Node $source Resolved source, whose extension is deliberately ignored.
+	 * @param string $to Normalized final destination path.
+	 * @param FileTypeCheck|null $snapshot Shared preflight boundary for projected file names.
+	 * @return void
+	 * @throws \OCA\Mcp\Tools\Common\FileTypeDenied If the destination type is refused.
+	 * @throws \OCA\Mcp\Service\FileWritePolicyUnavailable If policy cannot be evaluated.
+	 */
+	public function assertProjected(Node $source, string $to, ?FileTypeCheck $snapshot = null): void {
+		if ($source instanceof File) {
+			$segments = PathGuard::segments($to);
+			($snapshot ?? $this->guard->snapshot())->assertWritableName($segments[array_key_last($segments)] ?? '');
+		}
+	}
+
+	/**
+	 * Re-read immediately inside the lock-aware callback, before the actual native sink.
+	 *
+	 * @param Node $source Resolved source whose identity the surrounding native flow preserves.
+	 * @param string $to Final normalized path passed to the sink.
+	 * @param callable():Node $write Official Nextcloud copy or move.
+	 * @return Node Result of the official write.
+	 * @throws \OCA\Mcp\Tools\ToolFailure If policy or the native write refuses.
+	 */
+	public function write(Node $source, string $to, callable $write): Node {
+		$this->assertProjected($source, $to);
+		return $write();
+	}
+}

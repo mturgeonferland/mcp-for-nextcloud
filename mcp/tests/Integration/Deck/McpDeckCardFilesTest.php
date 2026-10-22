@@ -68,10 +68,11 @@ final class McpDeckCardFilesTest extends IntegrationTestCase {
 			self::assertStringNotContainsString($f['secretName'], json_encode($out));
 		}
 		$missing = $this->call(DeckFixture::EDITOR, ['cardId' => $f['a'], 'attachmentId' => 2147483000], true);
-		foreach (['hiddenShare', 'folderShare'] as $key) {
-			$out = $this->call(DeckFixture::EDITOR, ['cardId' => $f['a'], 'attachmentId' => $f[$key]], true);
-			self::assertSame($missing['result'], $out['result']);
-		}
+		$hidden = $this->call(DeckFixture::EDITOR, ['cardId' => $f['a'], 'attachmentId' => $f['hiddenShare']], true);
+		self::assertSame($missing['result'], $hidden['result']);
+		$folder = $this->call(DeckFixture::EDITOR, ['cardId' => $f['a'], 'attachmentId' => $f['folderShare']], true);
+		self::assertTrue($folder['result']['isError']);
+		self::assertSame('Folders cannot be linked or unlinked here. Choose a file.', $folder['result']['content'][0]['text']);
 		self::assertTrue($this->call(DeckFixture::READER, $this->args($f), true)['result']['isError']);
 		self::assertTrue($this->call(DeckFixture::EDITOR, ['cardId' => $f['a']], false, false)['result']['isError']);
 		self::assertContains($f['visibleShare'], $this->preserved($f)['a']);

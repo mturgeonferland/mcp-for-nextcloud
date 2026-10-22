@@ -96,6 +96,7 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
         private ?ShareRemover $shareRemover = null,
         private ?FileCreation $creation = null,
         private ?LockAwareWrite $locks = null,
+        private ?\OCA\Mcp\Tools\Common\FileTypeGuard $fileTypes = null,
     ) {}
 
     /** @return list<array{name:string, description:string, inputSchema:array<string, mixed>, module:string, operation:string, app?:string}> */
@@ -385,8 +386,8 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
             'files_list_shares' => ToolResult::json($this->listShares($root, $userId, $arguments['path'] ?? null, (int)$arguments['offset'])),
             'files_share' => self::shareResult($this->shareWriter()->apply($root, $userId, $arguments)),
             'files_unshare' => ToolResult::json($this->shareRemover()->apply($root, $userId, $arguments)),
-            'files_upload' => ToolResult::json($this->creation()->upload($root, $userId, $arguments['path'], $arguments['size'] ?? null, $confirmed)),
-            'files_create' => ToolResult::json($this->creation()->create($root, $userId, $arguments['path'], $arguments['content'], $confirmed)),
+            'files_upload' => ToolResult::json((new Handler\UploadFileHandler($this->creation()))->execute($root, $userId, $arguments['path'], $arguments['size'] ?? null, $confirmed)),
+            'files_create' => ToolResult::json((new Handler\CreateFileHandler($this->creation()))->execute($root, $userId, $arguments['path'], $arguments['content'], $confirmed)),
             default => throw new \InvalidArgumentException('Unknown tool'),
         });
     }
@@ -455,8 +456,8 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
             'files_version_restore' => $this->planRestore($root, $userId, $arguments['path'], $arguments['version']),
             'files_share' => $this->shareWriter()->plan($root, $userId, $arguments),
             'files_unshare' => $this->shareRemover()->plan($root, $userId, $arguments),
-            'files_upload' => $this->creation()->planUpload($root, $userId, $arguments['path'], $arguments['size'] ?? null),
-            'files_create' => $this->creation()->planCreate($root, $userId, $arguments['path'], $arguments['content']),
+            'files_upload' => (new Handler\UploadFileHandler($this->creation()))->plan($root, $userId, $arguments['path'], $arguments['size'] ?? null),
+            'files_create' => (new Handler\CreateFileHandler($this->creation()))->plan($root, $userId, $arguments['path'], $arguments['content']),
             default => throw new \InvalidArgumentException('Unknown tool'),
         });
     }
@@ -571,31 +572,7 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
      * @throws ToolFailure when the path is the backup folder or not a file, the etag is stale, versioning is off or the write would be refused
      */
     private function planCheckout(Folder $root, string $userId, string $path, ?string $etag): array {
-        $path = PathGuard::normalize($path);
-        $this->assertNotBackup($path);
-        $file = $this->file($root, $path);
-        NodeAccess::checkEtag($file, $etag);
-        $shared = $this->guard->guard($file, $userId, $path, false);
-        // The same refusal the mint gives, so the plan cannot promise links the upload would not honour.
-        $this->checkout->assertAvailable($userId);
-        return [
-            'action' => 'files_checkout',
-            'path' => $path,
-            'etag' => (string)$file->getEtag(),
-            'size' => (int)$file->getSize(),
-            'mime' => (string)$file->getMimetype(),
-            'downloadTtlSeconds' => CheckoutService::DOWNLOAD_TTL,
-            'uploadTtlSeconds' => CheckoutService::UPLOAD_TTL,
-            'uploadMaxBytes' => $this->checkout->maxBytes(),
-            'backup' => '/' . self::BACKUP_FOLDER,
-            'access' => $this->accessInfo->describe($file, $userId),
-            'shared' => $shared === null ? [] : [$shared],
-            'requiresSharedConfirmation' => $shared !== null,
-            'recoverable' => true,
-            'linksAfterConfirmation' => true,
-            'consequence' => FilesMessages::planCheckoutConsequence(),
-            'message' => FilesMessages::planCheckout(),
-        ] + $this->lockNotice($file, $userId, $path, false);
+        return (new Handler\CheckoutFileHandler($this->checkout, $this->accessInfo, $this->guard, $this->visibilityGuard, $this->locks, $this->fileTypes))->plan($root, $userId, $path, $etag);
     }
 
     /**
@@ -909,18 +886,7 @@ class FilesModule implements ToolModule, PreviewsWrites, RendersPlans, ToolGuide
      * @throws ToolFailure when the path is the backup folder or not a file, the etag is stale, or the write is refused
      */
     private function checkoutOut(Folder $root, string $userId, string $path, ?string $etag, bool $confirmed): array {
-        $path = PathGuard::normalize($path);
-        $this->assertNotBackup($path);
-        $file = $this->file($root, $path);
-        NodeAccess::checkEtag($file, $etag);
-        // A link for a file the upload could not write is no use: the lock is refused before any link is minted. The
-        // upload runs without the user's session, where files_lock refuses even the user's own manual lock.
-        $this->locks?->assertWritable($file, $userId, $path, false);
-        $access = $this->accessInfo->describe($file, $userId);
-        if (($payload = $this->guard->guard($file, $userId, $path, $confirmed)) !== null) {
-            return ToolResult::json($payload);
-        }
-        return ToolResult::json($this->checkout->issue($userId, $file, $path, $access, $confirmed));
+        return (new Handler\CheckoutFileHandler($this->checkout, $this->accessInfo, $this->guard, $this->visibilityGuard, $this->locks, $this->fileTypes))->execute($root, $userId, $path, $etag, $confirmed);
     }
 
     /**

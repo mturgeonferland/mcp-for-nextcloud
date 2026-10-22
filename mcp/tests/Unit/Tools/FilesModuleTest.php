@@ -92,7 +92,7 @@ final class FilesModuleTest extends TestCase {
         $this->module = new FilesModule($root, new TextExtractor($temp), new FileBackup($apps, $users, $time, $appConfig), $users, $db,
             $access, new SharedWriteGuard($access),
             new CheckoutService($urls, $appConfig, $time, new TokenHasher($appConfig), $this->createMock(CheckoutTokenStore::class), $apps, $users),
-            $versions, $reorganization, $planner, $store, $time, $imageTools, new OcrSupport($apps));
+            $versions, $reorganization, $planner, $store, $time, $imageTools, new OcrSupport($apps), fileTypes: \OCA\Mcp\Tests\Unit\Tools\FileTypePolicyFixture::off($this));
         $this->versions = $versions;
     }
 

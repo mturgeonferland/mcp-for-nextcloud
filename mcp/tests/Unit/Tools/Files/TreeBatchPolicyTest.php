@@ -68,6 +68,10 @@ final class TreeBatchPolicyTest extends FilesToolsTestCase {
 		self::assertNotEmpty($result['conflicts']);
 		self::assertArrayNotHasKey('/alice/files/copy/sub/late.php', $this->tree->nodes);
 		self::assertArrayNotHasKey('/alice/files/copy/a.php', $this->tree->nodes);
+		self::assertArrayNotHasKey('/alice/files/copy/a.txt', $this->tree->nodes);
+		self::assertContains('/copy/a.txt', $result['not_copied']);
+		self::assertContains(['path' => '/copy/a.txt', 'reason' => \OCA\Mcp\Tools\Common\CommonMessages::notFound()], $result['conflicts']);
+		self::assertSame('alpha', $root->get('src.php/a.php')->getContent());
 		self::assertSame('beta', $root->get('copy/sub/b.txt')->getContent());
 		self::assertSame([], array_filter($this->tree->ops, static fn ($op) => str_starts_with($op, 'delete')));
 	}
@@ -242,7 +246,7 @@ final class TreeBatchPolicyTest extends FilesToolsTestCase {
 		CopyMovePolicyFixture::forTest($this)->value = FileWritePolicy::defaults();
 		$this->tree->addFile('/alice/files/src.php/sub/existing.php', 'legacy', 'text/plain');
 		$out = $this->json('files_copy', ['from' => '/src.php', 'to' => '/native']);
-		self::assertFalse($out['partial']);
+		self::assertSame(['from', 'to', 'idBefore', 'idAfter', 'nodes', 'bytes', 'access'], array_keys($out));
 		self::assertSame('legacy', $this->tree->rootFolder()->get('native/sub/existing.php')->getContent());
 	}
 
@@ -454,5 +458,20 @@ final class TreeBatchPolicyTest extends FilesToolsTestCase {
 		self::assertSame(['/stage.php', '/final.php'], array_column($out, 'to'));
 		self::assertSame(array_fill(0, 2, \OCA\Mcp\Tools\Common\FileTypeMessages::denied()), array_column($out, 'reason'));
 		self::assertSame([], $this->tree->ops);
+	}
+
+	/** Only D10/B4 tree copies extend the public receipt; file copies keep their contract in either mode.
+	 * @return void
+	 */
+	public function testOnlyListedFolderCopyExtendsThePublicReceipt(): void {
+		$keys = ['from', 'to', 'idBefore', 'idAfter', 'nodes', 'bytes', 'access'];
+		$file = $this->json('files_copy', ['from' => '/src.php/a.txt', 'to' => '/active.txt']);
+		self::assertSame($keys, array_keys($file));
+		$folder = $this->json('files_copy', ['from' => '/src.php', 'to' => '/listed']);
+		self::assertSame([...$keys, 'partial', 'created', 'conflicts', 'not_copied'], array_keys($folder));
+		self::assertFalse($folder['partial']);
+		CopyMovePolicyFixture::forTest($this)->value = FileWritePolicy::defaults();
+		$file = $this->json('files_copy', ['from' => '/src.php/a.txt', 'to' => '/off.txt']);
+		self::assertSame($keys, array_keys($file));
 	}
 }

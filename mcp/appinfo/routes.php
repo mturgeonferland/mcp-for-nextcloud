@@ -52,6 +52,8 @@ return ['routes' => [
     ['name' => 'my_connections#index', 'url' => '/api/my/connections', 'verb' => 'GET'],
     ['name' => 'my_scope#index', 'url' => '/api/my/scope', 'verb' => 'GET'],
     ['name' => 'my_connections#destroy', 'url' => '/api/my/connections/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
+    ['name' => 'file_write_policy#show', 'url' => '/api/file-write-policy', 'verb' => 'GET'],
+    ['name' => 'file_write_policy#update', 'url' => '/api/file-write-policy', 'verb' => 'PUT'],
     ['name' => 'checkout_limit#show', 'url' => '/api/checkout-limit', 'verb' => 'GET'],
     ['name' => 'checkout_limit#update', 'url' => '/api/checkout-limit', 'verb' => 'PUT'],
     ['name' => 'tags#index', 'url' => '/api/admin/tags', 'verb' => 'GET'],

@@ -29,6 +29,7 @@
 \OCP\Util::addScript('mcp', 'admin-inspector');
 \OCP\Util::addScript('mcp', 'connections');
 \OCP\Util::addScript('mcp', 'admin-tabs');
+\OCP\Util::addScript('mcp', 'admin-file-write-policy');
 \OCP\Util::addStyle('mcp', 'admin');
 ?>
 <div id="mcp-admin" class="mcp-settings" data-service-enabled="<?php p($_['serviceEnabled'] ? '1' : '0'); ?>">
@@ -88,6 +89,7 @@
             </div>
         </div>
         <p class="settings-hint mcp-hint"><?php p($l->t('Paste the endpoint in the MCP client. Turning the service off signs every client out at once.')); ?></p>
+        <?php include __DIR__ . '/admin-file-write-policy-overview.php'; ?>
         <div id="mcp-tags-invalid-overview" class="mcp-tags-warning" role="alert" hidden>
             <p><?php p($l->t('The saved exclusion tags setting cannot be read, so the MCP tools treat every file and folder as not found. Choose the exclusion tags and save them again.')); ?> <a href="#protection"><?php p($l->t('Open Data protection')); ?></a></p>
         </div>
@@ -323,6 +325,7 @@
     </div>
 
     <div role="tabpanel" id="mcp-panel-protection" aria-labelledby="mcp-tab-protection" class="mcp-tab-panel" tabindex="0">
+    <?php include __DIR__ . '/admin-file-write-policy.php'; ?>
     <div class="section mcp-block" id="mcp-block-tags">
         <h2><?php p($l->t('Excluded from MCP access')); ?></h2>
         <p class="settings-hint mcp-hint"><?php p($l->t('Files and folders tagged with a selected tag, and everything inside those folders, are completely hidden from the tools of this MCP connector. The server log tools respect this only while “Hide the text of log messages” is on.')); ?></p>

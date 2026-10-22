@@ -114,13 +114,9 @@ OC.L10N.register(
     "the Nextcloud permissions" : "los permisos de Nextcloud",
     "the exclusion tags" : "las etiquetas de exclusión",
     "the resource scope" : "la restricción por recurso",
-
-
     "Discard the unsaved group changes?" : "¿Descartar los cambios del grupo sin guardar?",
     "The change could not be confirmed. Your draft is kept. Retry after checking the group." : "No se pudo confirmar el cambio. Se conserva su borrador. Compruebe el grupo y vuelva a intentarlo.",
     "The directory returned an invalid group ID. This group cannot be edited." : "El directorio devolvió un ID de grupo no válido. Este grupo no se puede editar.",
-
-
     "Access is unknown. A group policy or directory is unavailable; retry after checking the group." : "El acceso es desconocido. Una política de grupo o el directorio no está disponible; compruebe el grupo y vuelva a intentarlo.",
     "Confirm current policy" : "Confirmar la política actual",
     "Could not load groups." : "No se pudieron cargar los grupos.",
@@ -144,7 +140,6 @@ OC.L10N.register(
     "This policy is awaiting confirmation and does not grant access. Confirming or saving will let it grant access again." : "Esta política está pendiente de confirmación y no concede acceso. Al confirmar o guardar, volverá a conceder acceso.",
     "Unknown" : "Desconocido",
     "Unknown count" : "Cantidad desconocida",
-
     "Individual overrides" : "Definiciones individuales",
     "Select every user on this page" : "Seleccionar todos los usuarios de esta página",
     "The table changed, so the reset preview was closed. Review it again." : "La tabla cambió, así que se cerró la vista previa del restablecimiento. Revísala de nuevo.",
@@ -1403,6 +1398,29 @@ OC.L10N.register(
     "It has no letter or digit, so it looks like a placeholder rather than a real label." : "No tiene ninguna letra ni dígito, así que parece un marcador de posición y no una etiqueta real.",
     "This file type cannot be written through MCP. Ask an administrator to review the file type policy." : "Este tipo de archivo no se puede escribir mediante MCP. Pida al administrador que revise la política de tipos de archivo.",
     "The MCP file type policy is unavailable. Ask an administrator to review its settings." : "La política de tipos de archivo de MCP no está disponible. Pida al administrador que revise su configuración.",
-    "Invalid file type policy settings." : "Configuración de la política de tipos de archivo no válida."
+    "Invalid file type policy settings." : "Configuración de la política de tipos de archivo no válida.",
+    "File types writable through MCP" : "Tipos de archivo que MCP puede escribir",
+    "File type policy" : "Política de tipos de archivo",
+    "Choose a policy" : "Elige una política",
+    "No restriction (default)" : "Sin restricciones (predeterminado)",
+    "Only listed extensions" : "Solo las extensiones indicadas",
+    "Allowed extensions" : "Extensiones permitidas",
+    "Separate extensions with commas or new lines. An initial dot and uppercase letters are accepted. Up to 128 distinct extensions; each has 1–32 ASCII letters, digits, underscores or hyphens and starts with a letter or digit." : "Separa las extensiones con comas o saltos de línea. Se aceptan un punto inicial y mayúsculas. Hasta 128 extensiones distintas de 1–32 letras ASCII, dígitos, guiones bajos o guiones, empezando por una letra o un dígito.",
+    "Allow files without an extension" : "Permitir archivos sin extensión",
+    "With an empty list, only files without an extension can be allowed. If that option is off, all applicable writes are refused." : "Con la lista vacía solo se pueden permitir archivos sin extensión. Si esa opción está desactivada, se rechazan todas las escrituras sujetas a la política.",
+    "Save file type policy" : "Guardar política de tipos de archivo",
+    "Loading file type policy…" : "Cargando política de tipos de archivo…",
+    "Saving file type policy…" : "Guardando política de tipos de archivo…",
+    "File type policy saved." : "Política de tipos de archivo guardada.",
+    "The file type policy could not be loaded. Applicable MCP writes remain refused if the saved configuration is invalid. Choose a complete policy and save it to recover; no restriction is a deliberate choice." : "No se pudo cargar la política de tipos de archivo. Si la configuración guardada es inválida, las escrituras de MCP sujetas a ella siguen bloqueadas. Elige una política completa y guárdala para recuperarla; sin restricciones es una elección explícita.",
+    "The policy could not be saved and verified. Your input is preserved. Reload before relying on the saved state." : "No se pudo guardar y verificar la política. Se conserva tu entrada. Recarga antes de confiar en el estado guardado.",
+    "Choose no restriction or only listed extensions." : "Elige sin restricciones o solo las extensiones indicadas.",
+    "Enter valid extensions, separated by commas or new lines, without paths or wildcards." : "Introduce extensiones válidas separadas por comas o saltos de línea, sin rutas ni comodines.",
+    "Choose whether files without an extension are allowed." : "Elige si se permiten archivos sin extensión.",
+    "The file type policy could not be loaded or verified. MCP writes subject to it may be refused." : "No se pudo cargar o verificar la política de tipos de archivo. Las escrituras de MCP sujetas a ella pueden ser rechazadas.",
+    "This policy applies only to writes through this MCP connector. It checks the final file name and its last extension, not the file content. Other clients and WebDAV are outside its scope. With the policy active, a trailing dot or whitespace, a backslash, a colon in the name or a non-ASCII extension is refused. Names such as .env and .gitignore count as having no extension: listing env does not allow .env; use the option for files without an extension." : "Esta política solo se aplica a las escrituras mediante este conector MCP. Comprueba el nombre final y su última extensión, no el contenido. Otros clientes y WebDAV quedan fuera de su alcance. Con la política activa se rechazan un punto o espacio en blanco final, una barra invertida, dos puntos en el nombre o una extensión no ASCII. Los nombres como .env y .gitignore cuentan como archivos sin extensión: incluir env en la lista no permite .env; usa la opción para archivos sin extensión.",
+    "Notes needs md/txt in the list. Mandatory internal backups are exempt; Notes, existing files, administrators, version restore and undo follow the current policy." : "Notes necesita md/txt en la lista. Las copias de seguridad internas obligatorias están exentas; Notes, archivos existentes, administradores, restauración de versiones y deshacer siguen la política actual.",
+    "With the policy active, moving or copying a folder checks every file even when names stay the same, up to 2,000 nodes. This costs more work for large folders and can refuse a move containing a blocked jpg or pdf." : "Con la política activa, mover o copiar una carpeta comprueba cada archivo aunque no cambien los nombres, hasta 2.000 nodos. Esto supone más trabajo en carpetas grandes y puede rechazar mover una carpeta con un jpg o pdf bloqueado.",
+    "With a file type policy active, copying a folder checks every file inside it first and refuses the whole copy if any file is not allowed. The copy is then made file by file from that checked list: files another client adds or renames while the copy runs are not copied, and a failure partway leaves a partial copy that is reported and never removed. Moving a folder also checks every file inside it first, but the move itself is a single Nextcloud operation: a file another client adds to the folder in the short time between that check and the move is moved with it." : "Con una política de tipos activa, copiar una carpeta comprueba primero todos sus archivos y rechaza la copia completa si alguno no está permitido. Después se copia archivo por archivo a partir de esa lista: los archivos que otro cliente añada o renombre durante la copia no se copian; un fallo deja una copia parcial que se informa y nunca se elimina. Mover una carpeta también comprueba primero todos sus archivos, pero el movimiento es una sola operación de Nextcloud: un archivo que otro cliente añada entre la comprobación y el movimiento se mueve con ella."
 },
 "nplurals=3; plural=n == 1 ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;");

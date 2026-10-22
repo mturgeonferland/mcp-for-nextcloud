@@ -64,7 +64,7 @@ final class AdminAssetsTest extends TestCase {
         $app = dirname(__DIR__, 3);
         $template = (string)file_get_contents($app . '/templates/admin.php');
         preg_match_all("/Util::add(Script|Style)\\(\\s*'mcp'\\s*,\\s*'([^']+)'/", $template, $matches, PREG_SET_ORDER);
-        $this->assertCount(13, $matches);
+        $this->assertCount(14, $matches);
         // The levels mapping is read by the matrix, so it loads before it; the level popover uses the matrix, so after it.
         $this->assertLessThan(strpos($template, "addScript('mcp', 'admin-grants')"), strpos($template, "addScript('mcp', 'admin-levels')"));
         $this->assertGreaterThan(strpos($template, "addScript('mcp', 'admin-grants')"), strpos($template, "addScript('mcp', 'admin-level-popover')"));

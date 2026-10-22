@@ -112,12 +112,9 @@
     "the Nextcloud permissions" : "as permissões do Nextcloud",
     "the exclusion tags" : "as etiquetas de exclusão",
     "the resource scope" : "a restrição por recurso",
-
     "Discard the unsaved group changes?" : "Descartar as alterações não salvas do grupo?",
     "The change could not be confirmed. Your draft is kept. Retry after checking the group." : "Não foi possível confirmar a alteração. Seu rascunho foi mantido. Verifique o grupo e tente novamente.",
     "The directory returned an invalid group ID. This group cannot be edited." : "O diretório retornou um ID de grupo inválido. Este grupo não pode ser editado.",
-
-
     "Access is unknown. A group policy or directory is unavailable; retry after checking the group." : "O acesso é desconhecido. Uma política de grupo ou o diretório está indisponível; verifique o grupo e tente novamente.",
     "Confirm current policy" : "Confirmar política atual",
     "Could not load groups." : "Não foi possível carregar os grupos.",
@@ -141,7 +138,6 @@
     "This policy is awaiting confirmation and does not grant access. Confirming or saving will let it grant access again." : "Esta política aguarda confirmação e não concede acesso. Ao confirmar ou salvar, ela voltará a conceder acesso.",
     "Unknown" : "Desconhecido",
     "Unknown count" : "Contagem desconhecida",
-
     "Individual overrides" : "Definições individuais",
     "Select every user on this page" : "Selecionar todos os usuários desta página",
     "The table changed, so the reset preview was closed. Review it again." : "A tabela mudou, então a prévia da redefinição foi fechada. Revise-a de novo.",
@@ -178,7 +174,6 @@
     "_%n user loses “Can connect” and the access it gives. Their MCP connections are revoked, and undoing this does not sign them back in._::_%n users lose “Can connect” and the access it gives. Their MCP connections are revoked, and undoing this does not sign them back in._" : ["%n usuário perde “Pode conectar” e o acesso que ele dá. As conexões MCP dele são revogadas, e desfazer isto não o reconecta.", "%n usuários perdem “Pode conectar” e o acesso que ele dá. As conexões MCP deles são revogadas, e desfazer isto não os reconecta.", "%n usuários perdem “Pode conectar” e o acesso que ele dá. As conexões MCP deles são revogadas, e desfazer isto não os reconecta."],
     "_%n user keeps “Can connect” through a group, so nobody is signed out for it._::_%n users keep “Can connect” through a group, so nobody is signed out for it._" : ["%n usuário mantém “Pode conectar” por um grupo, então ninguém é desconectado por isso.", "%n usuários mantêm “Pode conectar” por um grupo, então ninguém é desconectado por isso.", "%n usuários mantêm “Pode conectar” por um grupo, então ninguém é desconectado por isso."],
     "_The “Can connect” of %n user after the reset is unknown. The reset is refused until the groups can be read._::_The “Can connect” of %n users after the reset is unknown. The reset is refused until the groups can be read._" : ["O “Pode conectar” de %n usuário depois da redefinição é desconhecido. A redefinição é recusada até que os grupos possam ser lidos.", "O “Pode conectar” de %n usuários depois da redefinição é desconhecido. A redefinição é recusada até que os grupos possam ser lidos.", "O “Pode conectar” de %n usuários depois da redefinição é desconhecido. A redefinição é recusada até que os grupos possam ser lidos."],
-
     "Folders cannot be shared, copied or moved to another directory through this connector while files are excluded from MCP access. Use the Nextcloud Files interface for these folder operations." : "Pastas não podem ser compartilhadas, copiadas ou movidas para outro diretório por este conector enquanto houver arquivos excluídos do acesso pelo MCP. Use a interface Arquivos do Nextcloud para essas operações com pastas.",
     "The file “%s” is locked by an app, usually because it is open in an editor." : "O arquivo “%s” está travado por um aplicativo, geralmente porque está aberto em um editor.",
     "The file “%s” is locked by %s." : "O arquivo “%s” está travado por %s.",
@@ -1401,6 +1396,29 @@
     "It has no letter or digit, so it looks like a placeholder rather than a real label." : "Ela não tem letra nem dígito, então parece um marcador e não um rótulo de verdade.",
     "This file type cannot be written through MCP. Ask an administrator to review the file type policy." : "Este tipo de arquivo não pode ser gravado pelo MCP. Peça ao administrador para verificar a política de tipos de arquivo.",
     "The MCP file type policy is unavailable. Ask an administrator to review its settings." : "A política de tipos de arquivo do MCP está indisponível. Peça ao administrador para verificar suas configurações.",
-    "Invalid file type policy settings." : "Configurações inválidas da política de tipos de arquivo."
+    "Invalid file type policy settings." : "Configurações inválidas da política de tipos de arquivo.",
+    "File types writable through MCP" : "Tipos de arquivo graváveis pelo MCP",
+    "File type policy" : "Política de tipos de arquivo",
+    "Choose a policy" : "Escolha uma política",
+    "No restriction (default)" : "Sem restrição (padrão)",
+    "Only listed extensions" : "Somente as extensões da lista",
+    "Allowed extensions" : "Extensões permitidas",
+    "Separate extensions with commas or new lines. An initial dot and uppercase letters are accepted. Up to 128 distinct extensions; each has 1–32 ASCII letters, digits, underscores or hyphens and starts with a letter or digit." : "Separe as extensões por vírgulas ou quebras de linha. São aceitos ponto inicial e maiúsculas. Até 128 extensões distintas de 1–32 letras ASCII, dígitos, sublinhados ou hífens, começando com letra ou dígito.",
+    "Allow files without an extension" : "Permitir arquivos sem extensão",
+    "With an empty list, only files without an extension can be allowed. If that option is off, all applicable writes are refused." : "Com a lista vazia, somente arquivos sem extensão podem ser permitidos. Se essa opção estiver desativada, todas as gravações sujeitas à política serão recusadas.",
+    "Save file type policy" : "Salvar política de tipos de arquivo",
+    "Loading file type policy…" : "Carregando política de tipos de arquivo…",
+    "Saving file type policy…" : "Salvando política de tipos de arquivo…",
+    "File type policy saved." : "Política de tipos de arquivo salva.",
+    "The file type policy could not be loaded. Applicable MCP writes remain refused if the saved configuration is invalid. Choose a complete policy and save it to recover; no restriction is a deliberate choice." : "Não foi possível carregar a política de tipos de arquivo. As gravações sujeitas à política continuam recusadas se a configuração salva for inválida. Escolha uma política completa e salve para recuperá-la; sem restrição é uma escolha explícita.",
+    "The policy could not be saved and verified. Your input is preserved. Reload before relying on the saved state." : "Não foi possível salvar e verificar a política. Sua entrada foi preservada. Recarregue antes de confiar no estado salvo.",
+    "Choose no restriction or only listed extensions." : "Escolha sem restrição ou somente as extensões da lista.",
+    "Enter valid extensions, separated by commas or new lines, without paths or wildcards." : "Informe extensões válidas, separadas por vírgulas ou quebras de linha, sem caminhos ou curingas.",
+    "Choose whether files without an extension are allowed." : "Escolha se arquivos sem extensão são permitidos.",
+    "The file type policy could not be loaded or verified. MCP writes subject to it may be refused." : "Não foi possível carregar ou verificar a política de tipos de arquivo. As gravações MCP sujeitas a ela podem ser recusadas.",
+    "This policy applies only to writes through this MCP connector. It checks the final file name and its last extension, not the file content. Other clients and WebDAV are outside its scope. With the policy active, a trailing dot or whitespace, a backslash, a colon in the name or a non-ASCII extension is refused. Names such as .env and .gitignore count as having no extension: listing env does not allow .env; use the option for files without an extension." : "Esta política se aplica somente às gravações por este conector MCP. Ela verifica o nome final e a última extensão, sem inspecionar o conteúdo. Outros clientes e WebDAV ficam fora do alcance. Com a política ativa, ponto ou espaço em branco final, barra invertida, dois-pontos no nome ou extensão fora de ASCII são recusados. Nomes como .env e .gitignore contam como arquivos sem extensão: incluir env na lista não libera .env; use a opção para arquivos sem extensão.",
+    "Notes needs md/txt in the list. Mandatory internal backups are exempt; Notes, existing files, administrators, version restore and undo follow the current policy." : "O Notes precisa de md/txt na lista. Backups internos obrigatórios são isentos; Notes, arquivos preexistentes, administradores, restauração de versão e desfazer seguem a política atual.",
+    "With the policy active, moving or copying a folder checks every file even when names stay the same, up to 2,000 nodes. This costs more work for large folders and can refuse a move containing a blocked jpg or pdf." : "Com a política ativa, mover ou copiar uma pasta verifica todos os arquivos mesmo sem mudar nomes, até 2.000 nós. Isso custa mais trabalho em pastas grandes e pode recusar mover uma pasta que contenha jpg ou pdf bloqueado.",
+    "With a file type policy active, copying a folder checks every file inside it first and refuses the whole copy if any file is not allowed. The copy is then made file by file from that checked list: files another client adds or renames while the copy runs are not copied, and a failure partway leaves a partial copy that is reported and never removed. Moving a folder also checks every file inside it first, but the move itself is a single Nextcloud operation: a file another client adds to the folder in the short time between that check and the move is moved with it." : "Com a política de tipos ativa, copiar uma pasta confere antes todos os arquivos dela e recusa a cópia inteira se algum não for permitido. A cópia é feita arquivo por arquivo a partir dessa lista conferida: arquivos que outro cliente adicionar ou renomear durante a cópia não são copiados, e uma falha no meio deixa uma cópia parcial, informada e nunca apagada. Mover uma pasta também confere antes todos os arquivos dela, mas o move em si é uma única operação do Nextcloud: um arquivo que outro cliente adicionar à pasta no curto intervalo entre a conferência e o move vai junto."
 },"pluralForm" :"nplurals=3; plural=(n == 0 || n == 1) ? 0 : n != 0 && n % 1000000 == 0 ? 1 : 2;"
 }

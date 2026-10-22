@@ -99,6 +99,8 @@ final class NotesPlanRenderer {
 		foreach ($changed as $field) {
 			if ($field === 'title' && isset($before['title'], $after['title'])) {
 				$lines[] = Translator::t('- Title: %s → %s', [$this->name((string)$before['title']), $this->name((string)$after['title'])]);
+			} elseif ($field === 'content' && is_array($plan['change'] ?? null)) {
+				$lines[] = $this->change($plan['change']);
 			} elseif ($field === 'content' && (array_key_exists('content', $before) || array_key_exists('content', $after))) {
 				$beforeExcerpt = $this->truncate((string)($before['content'] ?? ''));
 				$afterExcerpt = $this->truncate((string)($after['content'] ?? ''));
@@ -114,6 +116,19 @@ final class NotesPlanRenderer {
 		$this->appendSharedConsequences($lines, $plan['shared'] ?? []);
 
 		return implode("\n", $lines);
+	}
+
+	/**
+	 * The line of an append or a replace: only the text the call sends, never the note around it.
+	 *
+	 * @param array<string, mixed> $change the `change` of the plan
+	 * @return string one list line
+	 */
+	private function change(array $change): string {
+		if (array_key_exists('append', $change)) {
+			return Translator::t('- Append: %s', [$this->truncate((string)$change['append'])]);
+		}
+		return Translator::t('- Replace: %s → %s', [$this->truncate((string)($change['old'] ?? '')), $this->truncate((string)($change['new'] ?? ''))]);
 	}
 
 	/**

@@ -16,6 +16,7 @@ use OCA\Mcp\Tools\Common\LockAwareWrite;
 use OCA\Mcp\Tools\Common\LockWriteFailure;
 use OCA\Mcp\Tools\Common\PathGuard;
 use OCA\Mcp\Tools\Common\SharedWriteGuard;
+use OCA\Mcp\Tools\PlanState;
 use OCA\Mcp\Tools\PreviewsWrites;
 use OCA\Mcp\Tools\RendersPlans;
 use OCA\Mcp\Tools\ToolFailure;
@@ -47,6 +48,16 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
     /** Characters of the content a plan shows, so the user reads the note and not a wall of text. */
     private const EXCERPT_CHARS = 400;
 
+    /**
+     * @param NotesRepository $notes note lookup, reads and naming
+     * @param IAppManager $appManager whether the trash bin is on for the account
+     * @param IUserManager $userManager the account the trash-bin check is made for
+     * @param SharedWriteGuard $guard the confirmation a note outside the personal folder needs
+     * @param NodeAccessInfo $accessInfo who owns a note and who else it reaches
+     * @param VisibilityGuard|null $visibilityGuard administrator exclusions, null when none apply
+     * @param LockAwareWrite|null $locks the files_lock check, null when the app is not there
+     * @param PlanState|null $states the plan states of append and replace; the container always provides it
+     */
     public function __construct(
         private NotesRepository $notes,
         private IAppManager $appManager,
@@ -55,6 +66,7 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
         private NodeAccessInfo $accessInfo,
         private ?VisibilityGuard $visibilityGuard = null,
         private ?LockAwareWrite $locks = null,
+        private ?PlanState $states = null,
     ) {}
 
     /**
@@ -73,6 +85,7 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
                 . 'instead of removing it for good.',
             'Notes are capped at ' . self::MAX_BYTES . ' bytes read or written, and a title at 200 characters.',
             'Pass `etag` to make a change fail instead of overwriting somebody else\'s version of the same note.',
+            'For a small change use notes_edit with append or old/new: only the change is sent. Use content only to rewrite the whole note.',
             'Some notes or categories may be hidden by administrator policy and will appear as if they do not exist.',
         ];
     }
@@ -100,9 +113,11 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
             ], ['title']),
             self::tool('notes_edit', 'edit', NotesMessages::TOOL_EDIT_DESCRIPTION, [
                 'id' => $id,
+                ...NoteChange::properties(),
                 'content' => ['type' => 'string', 'description' => NotesMessages::PARAM_NEW_CONTENT],
                 'title' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 200, 'description' => NotesMessages::PARAM_NEW_TITLE],
                 'etag' => $etag,
+                PlanState::ARGUMENT => PlanState::property(),
                 'confirm_shared' => $confirmShared,
             ], ['id']),
             self::tool('notes_move', 'move', NotesMessages::TOOL_MOVE_DESCRIPTION, [
@@ -222,10 +237,16 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
         return $results;
     }
 
-    /** @return array{id:int, title:string, category:string, modified:int, etag:string, content:string, access:array<string, mixed>} */
+    /**
+     * @param Folder|null $root notes folder
+     * @param string $userId authenticated user
+     * @param int $id note id
+     * @return array{id:int, title:string, category:string, modified:int, etag:string, path:string, content:string, access:array<string, mixed>}
+     */
     private function read(?Folder $root, string $userId, int $id): array {
         $note = $this->notes->find($root, $id);
         return $this->notes->info($note, $root) + [
+            'path' => $this->notes->path($note, $userId),
             'content' => $this->notes->read($note),
             'access' => $this->accessInfo->describe($note, $userId),
         ];
@@ -250,24 +271,26 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
     }
 
     /**
-     * @param array{id:int, content?:string, title?:string, etag?:string, confirm_shared?:bool} $arguments
+     * @param Folder|null $root notes folder
+     * @param string $userId authenticated user
+     * @param array{id:int, content?:string, append?:string, old?:string, new?:string, title?:string, etag?:string, plan_state?:string, confirm_shared?:bool} $arguments
      * @return array<string, mixed> the note, or the shared-write confirmation without writing
      */
     private function edit(?Folder $root, string $userId, array $arguments): array {
-        if (!isset($arguments['content']) && !isset($arguments['title'])) {
-            throw new InvalidArgumentException('Missing argument: content');
-        }
+        $mode = NoteChange::mode($arguments);
         $note = $this->notes->find($root, $arguments['id']);
+        $partial = NoteChange::isPartial($mode) ? new NoteChangeConfirmation($this->notes, $this->accessInfo, $this->states, $this->locks) : null;
+        $content = $partial?->content($root, $userId, $note, $arguments, $mode) ?? ($arguments['content'] ?? null);
         $this->assertWritable($note, $arguments);
         $this->locks?->assertWritable($note, $userId);
         // Everything that can refuse is checked before the first write: the content has no backup, so
         // a refusal after it would leave the note overwritten by a call that reports failure. It is also
         // checked before the shared-write confirmation, so the user is never asked to approve a call
-        // the server would refuse.
-        if (isset($arguments['content'])) {
-            self::checkSize($arguments['content']);
+        // the server would refuse. An append or a replace is applied to the note as its plan showed it.
+        if ($content !== null) {
+            self::checkSize($content);
         }
-        $rename = isset($arguments['title']) ? $this->renameTarget($note, $arguments['title']) : null;
+        $rename = isset($arguments['title']) ? (new NoteChangeTitle($this->notes))->target($note, $arguments['title']) : null;
         if (($payload = $this->guard->guard($note, $userId, (string)$arguments['id'], (bool)($arguments['confirm_shared'] ?? false))) !== null) {
             return $payload;
         }
@@ -275,8 +298,10 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
         // check observes, the storage refusing it, a transactional lock, a permission), the answer says that the
         // content did change.
         $saved = false;
-        if (isset($arguments['content'])) {
-            $this->locked(fn () => $note->putContent($arguments['content']), $note, $userId);
+        if ($content !== null) {
+            // An append or a replace reads the note again right before it writes; a whole content just writes.
+            $write = $partial?->writer($root, $userId, $note, $arguments, $mode, $content) ?? fn () => $note->putContent($content);
+            $this->locked($write, $note, $userId);
             $saved = true;
         }
         if ($rename !== null) {
@@ -287,32 +312,6 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
             }
         }
         return $this->described($root, $userId, $arguments);
-    }
-
-    /**
-     * Where a note goes when it gets a new title.
-     *
-     * @param File $note note being renamed
-     * @param string $title raw new title
-     * @return string|null the new path, null when the name does not change
-     * @throws InvalidArgumentException when nothing usable is left of the title
-     * @throws ToolFailure when the rename is not permitted or another note in the category already has that name
-     */
-    private function renameTarget(File $note, string $title): ?string {
-        $name = $this->notes->renamedName($note, $title);
-        if ($name === $note->getName()) {
-            return null;
-        }
-        $parent = $note->getParent();
-        // A new title is a move inside the folder, and Nextcloud allows a move only with update on the
-        // node, delete at the source and create at the destination (the same folder).
-        if (!$note->isUpdateable() || !$note->isDeletable() || !$parent->isCreatable()) {
-            throw new ToolFailure(CommonMessages::forbidden());
-        }
-        if ($parent->nodeExists($name)) {
-            throw new ToolFailure(NotesMessages::titleExistsInCategory());
-        }
-        return $parent->getPath() . '/' . $name;
     }
 
     /**
@@ -430,12 +429,13 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
     /**
      * @param Folder|null $root notes folder
      * @param string $userId authenticated user
-     * @param array{id:int, content?:string, title?:string, etag?:string, confirm_shared?:bool} $arguments
-     * @return array<string, mixed> the note before and after the change
+     * @param array{id:int, content?:string, append?:string, old?:string, new?:string, title?:string, etag?:string, confirm_shared?:bool} $arguments
+     * @return array<string, mixed> the note before and after the change, or the plan of an append or a replace
      */
     private function previewEdit(?Folder $root, string $userId, array $arguments): array {
-        if (!isset($arguments['content']) && !isset($arguments['title'])) {
-            throw new InvalidArgumentException('Missing argument: content');
+        $mode = NoteChange::mode($arguments);
+        if (NoteChange::isPartial($mode)) {
+            return (new NoteChangePreview($this->notes, $this->accessInfo, $this->states, $this->locks))->plan($root, $userId, $arguments, $mode);
         }
         $note = $this->notes->find($root, $arguments['id']);
         if (isset($arguments['content'])) {
@@ -447,7 +447,7 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
         }
         // The same refusal the write gives, so the user is never asked to approve what would fail.
         if (isset($arguments['title'])) {
-            $this->renameTarget($note, $arguments['title']);
+            (new NoteChangeTitle($this->notes))->target($note, $arguments['title']);
         }
         $before = $this->snapshot($root, $note);
         $after = $before;
@@ -473,7 +473,7 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
             'shared' => $this->shared($note, $userId),
             'recoverable' => true,
             'message' => NotesMessages::planEdit(),
-        ] + $this->lockNotice($note, $userId);
+        ] + ($this->locks?->planNotice($note, $userId) ?? []);
     }
 
     /**
@@ -512,7 +512,7 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
             'shared' => $this->shared($note, $userId),
             'recoverable' => true,
             'message' => NotesMessages::planMove(),
-        ] + $this->lockNotice($note, $userId);
+        ] + ($this->locks?->planNotice($note, $userId) ?? []);
     }
 
     /**
@@ -540,7 +540,7 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
             'recoverable' => true,
             'consequence' => NotesMessages::planDeleteConsequence(),
             'message' => NotesMessages::planDelete(),
-        ] + $this->lockNotice($note, $userId);
+        ] + ($this->locks?->planNotice($note, $userId) ?? []);
     }
 
     /**
@@ -699,15 +699,6 @@ class NotesModule implements ToolModule, PreviewsWrites, ToolGuideNotes, Renders
         } catch (\Throwable) {
         }
         return $e;
-    }
-
-    /**
-     * @param File $note the note a plan describes
-     * @param string $userId authenticated user
-     * @return array<string, mixed> the lock and its warning for the plan, nothing for a free note
-     */
-    private function lockNotice(File $note, string $userId): array {
-        return $this->locks?->planNotice($note, $userId) ?? [];
     }
 
     /**

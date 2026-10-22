@@ -20,9 +20,10 @@ final class NotesMessages {
     /* Tool descriptions, exposed to MCP clients in tools/list. */
     public const TOOL_LIST_DESCRIPTION = 'Lists the notes (Notes app) of the user.';
     public const TOOL_SEARCH_DESCRIPTION = 'Searches notes by title and content (Markdown).';
-    public const TOOL_READ_DESCRIPTION = 'Reads the content of a note by id.';
+    public const TOOL_READ_DESCRIPTION = 'Reads the content, path and etag of a note by id.';
     public const TOOL_CREATE_DESCRIPTION = 'Creates a note; never overwrites an existing one.';
-    public const TOOL_EDIT_DESCRIPTION = 'Changes the content and/or the title of a note.';
+    public const TOOL_EDIT_DESCRIPTION = 'Changes a note with one of: append (add at the end) or old/new (replace one unique passage), '
+        . 'confirmed with the etag and plan_state of the plan; or content (rewrite it whole). title renames.';
     public const TOOL_MOVE_DESCRIPTION = 'Moves a note to another category.';
     public const TOOL_DELETE_DESCRIPTION = 'Deletes a note to the Nextcloud trash bin, where it can be restored.';
 
@@ -32,7 +33,10 @@ final class NotesMessages {
     public const PARAM_TITLE = 'Title (file name).';
     public const PARAM_CONTENT = 'Content in Markdown.';
     public const PARAM_CATEGORY = 'Category (subfolder); empty for the root.';
-    public const PARAM_NEW_CONTENT = 'New complete content.';
+    public const PARAM_NEW_CONTENT = 'New complete content; only to rewrite the whole note.';
+    public const PARAM_APPEND = 'Text added at the end, on a new line.';
+    public const PARAM_OLD = 'Passage to replace; must appear exactly once.';
+    public const PARAM_NEW = 'Text that replaces old.';
     public const PARAM_NEW_TITLE = 'New title.';
     public const PARAM_CATEGORY_TARGET = 'Destination category; empty for the root.';
     public const PARAM_CONFIRM_SHARED = 'Required only when the note is outside your personal folder '
@@ -137,6 +141,53 @@ final class NotesMessages {
      */
     public static function excerptTruncated(): string {
         return Translator::t('[content truncated]');
+    }
+
+    /**
+     * A notes_edit with more than one of content, append and old/new.
+     * @return string The message in the language of the current user.
+     */
+    public static function editModesExclusive(): string {
+        return Translator::t('Use only one of content, append or old/new.');
+    }
+
+    /**
+     * A confirmed append or replace without the etag it applies to.
+     * @return string The message in the language of the current user.
+     */
+    public static function editNeedsEtag(): string {
+        return Translator::t('append and old/new need the etag returned by notes_read or by the plan.');
+    }
+
+    /**
+     * An append or replace whose etag no longer matches: nothing is written, and the model gets what to read again.
+     * @param string $etag the note's etag now
+     * @return string The message in the language of the current user.
+     */
+    public static function changedSinceRead(string $etag): string {
+        return Translator::t('The note changed since it was read; nothing was written. Current etag: %s', [$etag]);
+    }
+
+    /**
+     * First warning of the new plan a confirmed append or replace answers with when the note is not the approved one.
+     * @return string The message in the language of the current user.
+     */
+    public static function notePlanChanged(): string {
+        return Translator::t('The note changed since the plan; check it again.');
+    }
+
+    /**
+     * @return string The message in the language of the current user.
+     */
+    public static function planAppend(): string {
+        return Translator::t('Nothing was changed. After your approval the text below is added at the end of the note.');
+    }
+
+    /**
+     * @return string The message in the language of the current user.
+     */
+    public static function planReplace(): string {
+        return Translator::t('Nothing was changed. After your approval the passage below is replaced in the note.');
     }
 
     /**

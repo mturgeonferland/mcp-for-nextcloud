@@ -1,6 +1,16 @@
 OC.L10N.register(
     "mcp",
     {
+    "The specified snippet appears more than once in the file; provide a longer, unique snippet." : "O trecho informado aparece mais de uma vez no arquivo; informe um trecho maior e único.",
+    "Use only one of content, append or old/new." : "Use apenas um entre content, append ou old/new.",
+    "append and old/new need the etag returned by notes_read or by the plan." : "append e old/new exigem o etag devolvido pelo notes_read ou pelo plano.",
+    "The note changed since it was read; nothing was written. Current etag: %s" : "A nota mudou desde a leitura; nada foi gravado. Etag atual: %s",
+    "Nothing was changed. After your approval the text below is added at the end of the note." : "Nada foi alterado. Após sua aprovação, o texto abaixo é acrescentado ao fim da nota.",
+    "Nothing was changed. After your approval the passage below is replaced in the note." : "Nada foi alterado. Após sua aprovação, o trecho abaixo é substituído na nota.",
+    "- Append: %s" : "- Acrescentar: %s",
+    "- Replace: %s → %s" : "- Substituir: %s → %s",
+    "The note changed since the plan; check it again." : "A nota mudou desde o plano; confira de novo.",
+    "The specified snippet is longer than %d bytes; send a shorter, unique snippet." : "O trecho informado passa de %d bytes; envie um trecho menor e único.",
     "person" : "pessoa",
     "group" : "grupo",
     "Read only" : "Somente leitura",

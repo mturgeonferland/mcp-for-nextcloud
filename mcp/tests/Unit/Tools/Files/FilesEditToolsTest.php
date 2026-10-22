@@ -69,10 +69,10 @@ final class FilesEditToolsTest extends FilesToolsTestCase {
         $this->assertSame([], $this->tree->ops);
     }
 
-    /** The count is over bytes, so the same snippet twice in a Latin-1 file is still ambiguous. */
-    public function testReplaceCountsOccurrencesOverBytes(): void {
+    /** The search is over bytes, so the same snippet twice in a Latin-1 file is still ambiguous. */
+    public function testReplaceSearchesOccurrencesOverBytes(): void {
         $this->tree->addFile('/alice/files/Documentos/pessoas.csv', "Rio\nS\xE3o\nRio\n", 'text/csv');
-        $this->assertSame(FilesMessages::snippetAmbiguous(2),
+        $this->assertSame(FilesMessages::snippetAmbiguous(),
             $this->failure('files_replace', ['path' => '/Documentos/pessoas.csv', 'old' => 'Rio', 'new' => 'x']));
     }
 
@@ -196,12 +196,38 @@ final class FilesEditToolsTest extends FilesToolsTestCase {
         $this->plan('files_checkout', ['path' => '/Documentos/ata.md', 'etag' => 'outro']);
     }
 
-    /** substr_count does not count overlaps, and neither does str_replace; the two must agree. */
-    public function testReplaceWithAnOverlappingSnippetFollowsNonOverlappingSemantics(): void {
+    /** NT-1 F1: occurrences that share bytes are still two ("aa" sits at offsets 0 and 1 of "aaa"), so nothing is written. */
+    public function testReplaceRefusesAnOverlappingSnippetInThePlanAndTheWrite(): void {
         $this->tree->addFile('/alice/files/Documentos/aaa.txt', 'aaa', 'text/plain');
-        $out = $this->json('files_replace', ['path' => '/Documentos/aaa.txt', 'old' => 'aa', 'new' => 'b']);
-        $this->assertSame('ba', $this->tree->nodes['/alice/files/Documentos/aaa.txt']['content']);
-        $this->assertStringContainsString('-aaa', $out['diff']);
+        $arguments = ['path' => '/Documentos/aaa.txt', 'old' => 'aa', 'new' => 'b'];
+        $this->assertSame(FilesMessages::snippetAmbiguous(), $this->failure('files_replace', $arguments));
+        $this->assertSame(FilesMessages::snippetAmbiguous(), $this->planFailure('files_replace', $arguments));
+        $this->assertSame('aaa', $this->tree->nodes['/alice/files/Documentos/aaa.txt']['content']);
+        $this->assertSame([], $this->tree->ops);
+    }
+
+    /**
+     * NT-1: the snippet is capped at 64 KiB, in characters by the schema and in bytes by the server, so a multibyte
+     * snippet under the character bound but over the byte one is refused too; one at the limit is replaced.
+     */
+    public function testReplaceLimitsTheSnippetTo64KibInCharactersAndBytes(): void {
+        $limit = \OCA\Mcp\Tools\Files\UniqueSnippet::MAX_BYTES;
+        $content = '<' . str_repeat('a', $limit) . '>' . str_repeat('ç', $limit / 2 + 1);
+        $this->tree->addFile('/alice/files/Documentos/grande.txt', $content, 'text/plain');
+        try {
+            $this->plan('files_replace', ['path' => '/Documentos/grande.txt', 'old' => str_repeat('a', $limit + 1), 'new' => 'X']);
+            $this->fail('a snippet over maxLength passed the schema');
+        } catch (\InvalidArgumentException) {
+            $this->addToAssertionCount(1);
+        }
+        $multibyte = ['path' => '/Documentos/grande.txt', 'old' => str_repeat('ç', $limit / 2 + 1), 'new' => 'X'];
+        $this->assertStringContainsString((string)$limit, $this->planFailure('files_replace', $multibyte));
+        $this->assertStringContainsString((string)$limit, $this->failure('files_replace', $multibyte));
+        $this->assertSame($content, $this->tree->nodes['/alice/files/Documentos/grande.txt']['content']);
+        $this->assertSame([], $this->tree->ops);
+
+        $this->json('files_replace', ['path' => '/Documentos/grande.txt', 'old' => str_repeat('a', $limit), 'new' => 'X']);
+        $this->assertSame('<X>' . str_repeat('ç', $limit / 2 + 1), $this->tree->nodes['/alice/files/Documentos/grande.txt']['content']);
     }
 
     public function testReplaceRefusesASnippetThatIsNotThere(): void {
@@ -210,9 +236,9 @@ final class FilesEditToolsTest extends FilesToolsTestCase {
         $this->assertSame([], $this->tree->ops);
     }
 
-    public function testReplaceRefusesAnAmbiguousSnippetAndSaysHowOftenItOccurs(): void {
+    public function testReplaceRefusesAnAmbiguousSnippet(): void {
         $this->tree->addFile('/alice/files/Documentos/repetido.md', 'a a a', 'text/markdown');
-        $this->assertSame(FilesMessages::snippetAmbiguous(3),
+        $this->assertSame(FilesMessages::snippetAmbiguous(),
             $this->failure('files_replace', ['path' => '/Documentos/repetido.md', 'old' => 'a', 'new' => 'b']));
         $this->assertSame([], $this->tree->ops);
     }

@@ -49,7 +49,7 @@ final class DeckTranslationTest extends TestCase {
 	public function testLabelMetadataStaysEnglishAndTheHumanTitleIsTranslated(): void {
 		// MCP descriptions/parameters are model-facing English, as required by ToolPresentation::INSTRUCTIONS.
 		self::assertSame([
-			'Lists the labels available on a readable Deck board, with their IDs, titles and colours.',
+			'Lists the labels available on a readable Deck board, with their IDs, titles and colours. Available on Nextcloud 32 through 35 when Deck is enabled (proved with Deck 1.16.8, 1.17.7, 1.18.5 and 1.19.0).',
 			'Maximum number of labels to return.',
 			'Number of labels to skip.',
 		], [DeckMessages::TOOL_LIST_LABELS_DESCRIPTION, DeckMessages::PARAM_LABEL_LIMIT, DeckMessages::PARAM_LABEL_OFFSET]);

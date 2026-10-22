@@ -68,6 +68,7 @@ final class FileWriteGuardCoverageTest extends TestCase {
 			'Tools/Files/Reorganization.php#undoBatch:move:1' => 'pending T15-6: inverse preflight before createFolders',
 			'Tools/Files/Reorganization.php#createFolders:newfolder:1' => 'directory: type not applicable; T15-6 must preflight associated files first',
 			'Tools/Common/NodeAccess.php#ensureFolder:newfolder:1' => 'directory: auxiliary folder, not a file; callers preflight associated files',
+			'Tools/Notes/NoteChangeConfirmation.php#writer:putcontent:1' => 'pending T15-7: NT-1 notes_edit writer before putContent',
 			'Tools/Notes/NotesModule.php#call:move:1' => 'pending T15-7: notes_move delegation',
 			'Tools/Notes/NotesModule.php#create:newfile:1' => 'pending T15-7: actual freeName before newFile',
 			'Tools/Notes/NotesModule.php#edit:putcontent:1' => 'pending T15-7: whole edit and NT-1 writers after merge',
@@ -91,12 +92,16 @@ final class FileWriteGuardCoverageTest extends TestCase {
 		self::assertSame($expected, $actual, 'New/unclassified or removed/renamed sink: update the explicit inventory, never silently waive it.');
 	}
 
-	/** New stream primitives add no production calls; all 41 prior calls and 18 explicit literals remain visible. */
+	/**
+	 * Keep 42 real calls, including the merged NT-1 writer, and 18 explicit literals visible.
+	 *
+	 * @return void
+	 */
 	public function testLiteralLabelsKeepTheOriginalCallInventory(): void {
 		$calls = FileWriteSinkInventory::calls(FileWriteSinkInventory::sources(__DIR__ . '/../../../lib'));
 		$literals = array_values(array_filter($calls, static fn (string $call): bool => str_contains($call, ':literal-')));
 		self::assertCount(18, $literals);
-		self::assertCount(41, array_diff($calls, $literals));
+		self::assertCount(42, array_diff($calls, $literals));
 		foreach ($calls as $call) {
 			self::assertDoesNotMatchRegularExpression('/:(?:literal-)?(?:writestream|fputs):/', $call);
 		}

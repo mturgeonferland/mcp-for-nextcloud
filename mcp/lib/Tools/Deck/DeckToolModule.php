@@ -128,7 +128,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				. 'list to an existing board. deck_delete_stack and deck_delete_board work only on something empty: they refuse, '
 				. 'saying how many cards are left, while any card (active or archived) remains, and what they delete goes to the Deck trash. A card created by somebody else right after the second count '
 				. 'they take before finishing may go to the trash with the list or board; it is recoverable there.',
-			'duedate is a plain day (Y-m-d) and is read in the timezone of the account; a card description is capped '
+			CardDueDateMessages::GUIDE_NOTE . ' A card description is capped '
 				. 'at ' . CardInput::MAX_DESCRIPTION_LENGTH . ' characters and a title at 255.',
 			'deck_move_card only changes the position inside the list of the card; moving it to another list or another '
 				. 'board is not something this module does.',
@@ -553,7 +553,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 			'card' => [
 				'title' => CardInput::requireTitle((string)$arguments['title']),
 				'description' => CardInput::requireDescription((string)($arguments['description'] ?? '')),
-				'dueDate' => CardInput::duedate($arguments['duedate'] ?? null),
+				'dueDate' => CardInput::duedate($arguments['duedate'] ?? null, $this->formatter($userId)->timezone()),
 				'owner' => $userId,
 			] + ($assignees === null ? [] : ['assignees' => $assignees]),
 			'destination' => $place,
@@ -587,7 +587,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				: $before['description'],
 			// Absent keeps the date as it is; an explicit null clears it, exactly as the write reads it.
 			'duedate' => array_key_exists('duedate', $given)
-				? $this->day(CardInput::duedate($given['duedate']), $zone)
+				? CardDueDateView::planValue($given['duedate'], $zone)
 				: $before['duedate'],
 		];
 		$assignees = $editsAssignees ? $this->planAssignees($userId, $card, $changes) : null;
@@ -698,7 +698,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	 * @throws InvalidArgumentException Naming the field when the structure is refused.
 	 */
 	private function planCreateBoard(array $arguments, string $userId): array {
-		$blueprint = BoardBlueprint::parse($arguments, $userId);
+		$blueprint = BoardBlueprint::parse($arguments, $userId, $this->formatter($userId)->timezone());
 		// Only the owner can be assigned on a new board, and BoardBlueprint has already refused anybody else.
 		$self = ['uid' => $userId, 'displayName' => $this->userManager?->get($userId)?->getDisplayName() ?: $userId];
 
@@ -891,17 +891,6 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 	}
 
 	/**
-	 * Local midnight of the day, as shown in the plan; the gateway stores the same instant in UTC.
-	 *
-	 * @param string|null $day `YYYY-MM-DD`, or null to clear the date.
-	 * @param \DateTimeZone $zone Timezone of the caller.
-	 * @return string|null ISO 8601 instant at local midnight, or null.
-	 */
-	private function day(?string $day, \DateTimeZone $zone): ?string {
-		return $day === null ? null : CardCriteria::localMidnight($day, $zone);
-	}
-
-	/**
 	 * Builds the handler of a tool, or null when the name is unknown.
 	 *
 	 * @param string $name Tool name as sent by the client.
@@ -927,7 +916,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 			EditCardHandler::TOOL => new EditCardHandler($this->gateway(), $this->logger, $formatter),
 			MoveCardHandler::TOOL => new MoveCardHandler($this->gateway(), $this->logger, $formatter),
 			DeleteCardHandler::TOOL => new DeleteCardHandler($this->gateway(), $this->logger, $formatter),
-			CreateBoardHandler::TOOL => new CreateBoardHandler($this->gateway(), $this->logger),
+			CreateBoardHandler::TOOL => new CreateBoardHandler($this->gateway(), $this->logger, $this->formatter($userId)->timezone()),
 			CreateStackHandler::TOOL => new CreateStackHandler($this->gateway(), $this->logger),
 			DeleteStackHandler::TOOL => new DeleteStackHandler($this->gateway(), $this->logger),
 			DeleteBoardHandler::TOOL => new DeleteBoardHandler($this->gateway(), $this->logger),

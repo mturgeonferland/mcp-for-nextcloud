@@ -373,4 +373,37 @@ final class DeckPreviewTest extends TestCase {
 
 		return new ToolRegistry([$this->moduleWith($gateway, $users)], $policy, $apps, $users, $this->createMock(LoggerInterface::class));
 	}
+
+	/**
+	 * Edit preview detects a time-only change while equivalent offsets leave the same instant unchanged.
+	 *
+	 * @param string $zone Account timezone.
+	 * @param string $hour Expected local changed time.
+	 * @return void
+	 */
+	#[DataProvider('previewZones')]
+	public function testTimedEditPreviewUsesInstants(string $zone, string $hour): void {
+		$gateway = $this->createMock(DeckGatewayInterface::class);
+		$gateway->method('cardOwnership')->willReturn($this->ownershipOf('alice'));
+		$gateway->method('findCard')->willReturn($this->card(['id' => 7, 'stackId' => 10, 'title' => 'Timed', 'description' => '', 'duedate' => new \DateTime('2026-10-01T18:30:19Z')]));
+		$config = $this->createMock(IConfig::class);
+		$config->method('getUserValue')->with('alice', 'core', 'timezone', '')->willReturn($zone);
+		$module = $this->moduleWith($gateway, null, $config);
+		$same = $module->preview('deck_edit_card', ['cardId' => 7, 'duedate' => '2026-10-01T15:30:19-03:00'], 'alice');
+		$changed = $module->preview('deck_edit_card', ['cardId' => 7, 'duedate' => '2026-10-01T16:30:19-03:00'], 'alice');
+		self::assertNotContains('duedate', $same['changed']);
+		self::assertContains('duedate', $changed['changed']);
+		self::assertStringContainsString($hour, $module->renderPlan('deck_edit_card', $changed));
+		self::assertStringContainsString(str_replace('_', '\\_', $zone), $module->renderPlan('deck_edit_card', $changed));
+	}
+
+	/**
+	 * Exercise both the default zone and an account-local zone in the actual module preview.
+	 *
+	 * @return iterable<array{string, string}> Account zone and local changed hour.
+	 */
+	public static function previewZones(): iterable {
+		yield ['UTC', '19:30:19'];
+		yield ['America/Sao_Paulo', '16:30:19'];
+	}
 }

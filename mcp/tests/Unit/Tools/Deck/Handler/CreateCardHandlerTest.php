@@ -10,6 +10,7 @@ namespace OCA\Mcp\Tests\Unit\Tools\Deck\Handler;
 use InvalidArgumentException;
 use OCA\Deck\NoPermissionException;
 use OCA\Deck\StatusException;
+use OCA\Mcp\Tools\Deck\CardDueDateMessages;
 use OCA\Mcp\Tools\Deck\CardFormatter;
 use OCA\Mcp\Tools\Deck\CardInput;
 use OCA\Mcp\Tools\Deck\DeckGatewayInterface;
@@ -147,7 +148,7 @@ final class CreateCardHandlerTest extends TestCase {
 		$handler = new CreateCardHandler($gateway, $this->createMock(LoggerInterface::class), $this->cardFormatter());
 
 		$this->expectException(InvalidArgumentException::class);
-		$this->expectExceptionMessage(DeckMessages::errorInvalidDuedate());
+		$this->expectExceptionMessage(CardDueDateMessages::invalid());
 
 		$handler->handle(['stackId' => 10, 'title' => 'Fechar', 'duedate' => '2026-02-31'], 'alice');
 	}

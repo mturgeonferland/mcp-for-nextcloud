@@ -33,7 +33,6 @@ final class DeckTranslationTest extends TestCase {
 		'errorConflict' => 'O item do Deck mudou durante a operação. Tente de novo.',
 		'errorGeneric' => 'Não foi possível concluir a operação no Deck.',
 		'errorNoFieldToEdit' => 'Informe ao menos um campo para editar: title, description, duedate, assign ou unassign.',
-		'errorInvalidDuedate' => 'A data prevista deve ser uma data válida no formato AAAA-MM-DD.',
 		'errorInvalidDueBefore' => 'A data de dueBefore deve ser uma data válida no formato AAAA-MM-DD.',
 		'errorInvalidStatus' => 'Status inválido para o acompanhamento. Use overdue, open, done ou all.',
 		'errorDescriptionTooLong' => 'A descrição do card excede o tamanho máximo de 100000 caracteres.',
@@ -152,6 +151,26 @@ final class DeckTranslationTest extends TestCase {
 		self::assertNotEmpty($texts);
 		foreach ($texts as $text) {
 			self::assertDoesNotMatchRegularExpression('/[À-ÿ]|AAAA|\bpara\b|\bdo Deck\b/u', $text);
+		}
+	}
+
+	/**
+	 * Every new caller-facing deadline error and plan format has a catalog entry in each supported language.
+	 *
+	 * @return void
+	 */
+	public function testTimedDeadlineTranslations(): void {
+		$source = \OCA\Mcp\Tools\Deck\CardDueDateMessages::nonexistent();
+		$invalid = \OCA\Mcp\Tools\Deck\CardDueDateMessages::invalid();
+		foreach (['pt_BR', 'es', 'de'] as $language) {
+			$catalog = json_decode(file_get_contents(__DIR__ . '/../../../../l10n/' . $language . '.json'), true)['translations'];
+			self::assertArrayHasKey($invalid, $catalog);
+			self::assertArrayHasKey($source, $catalog);
+			self::assertArrayHasKey('%s (%s, UTC%s)', $catalog);
+			Translator::use(new JsonL10n($language));
+			self::assertNotSame($source, \OCA\Mcp\Tools\Deck\CardDueDateMessages::nonexistent());
+			self::assertSame($catalog[$invalid], \OCA\Mcp\Tools\Deck\CardDueDateMessages::invalid());
+			self::assertStringContainsString('YYYY-MM-DDTHH:MM[:SS]', $catalog[$invalid]);
 		}
 	}
 }

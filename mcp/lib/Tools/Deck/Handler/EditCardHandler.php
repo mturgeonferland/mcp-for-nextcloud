@@ -13,6 +13,7 @@ use OCA\Deck\Db\Card;
 use OCA\Mcp\L10n\Translator;
 use OCA\Mcp\Tools\Deck\AssigneeChanges;
 use OCA\Mcp\Tools\Deck\CardCriteria;
+use OCA\Mcp\Tools\Deck\CardDueDate;
 use OCA\Mcp\Tools\Deck\CardFormatter;
 use OCA\Mcp\Tools\Deck\CardInput;
 use OCA\Mcp\Tools\Deck\DeckConflictException;
@@ -96,7 +97,7 @@ final class EditCardHandler extends AbstractHandler {
 				? CardInput::requireDescription((string)$given['description'])
 				: (string)$card->getDescription();
 			$duedate = array_key_exists('duedate', $given)
-				? CardInput::duedate($given['duedate'])
+				? CardInput::duedate($given['duedate'], $this->formatter->timezone())
 				: $this->currentDuedate($card->getDuedate());
 			$resolved = AssigneeChanges::resolve($changes['assign'], $changes['unassign'], CardCriteria::assignedUids($card));
 			if ($resolved['add'] !== []) {
@@ -206,15 +207,15 @@ final class EditCardHandler extends AbstractHandler {
 	 * @param Card $before Card as read before the update.
 	 * @param string $title Title sent.
 	 * @param string $description Description sent.
-	 * @param string|null $duedate Due date sent; only presence is compared here. MCP sends UTC with Z; Deck stores
-	 *     a timezone-less datetime and hydrates it in UTC, so local and read-back strings may differ.
+	 * @param string|null $duedate Requested deadline; read-back must match its UTC timestamp to the second.
+	 *     The gateway sends UTC Z to native Deck, whose timezone-less column hydrates in UTC.
 	 * @return Card|null The saved card, or null when the update did not happen.
 	 */
 	private function savedEdit(string $userId, Card $before, string $title, string $description, ?string $duedate): ?Card {
 		$card = $this->gateway->cardState($userId, (int)$before->getId());
 		$saved = (string)$card->getTitle() === $title
 			&& self::withoutAstral((string)$card->getDescription()) === self::withoutAstral($description)
-			&& ($card->getDuedate() === null) === ($duedate === null)
+			&& CardDueDate::same($card->getDuedate(), $duedate, $this->formatter->timezone())
 			&& (int)$card->getLastModified() !== (int)$before->getLastModified();
 
 		return $saved ? $card : null;

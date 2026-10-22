@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Mcp\Tests\Unit\Tools\Deck;
 
 use OCA\Mcp\Tools\Deck\CardCriteria;
+use OCA\Mcp\Tools\Deck\CardDueDate;
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/Stubs/deck_stubs.php';
@@ -84,7 +85,7 @@ final class CardCriteriaTest extends TestCase {
 	 * @return void
 	 */
 	public function testLocalMidnightForPlansRepresentsTheSameDayInUtc(): void {
-		$stored = CardCriteria::localMidnight('2026-10-01', $this->saoPaulo);
+		$stored = CardDueDate::midnight('2026-10-01', $this->saoPaulo)->format(\DateTimeInterface::ATOM);
 
 		self::assertSame('2026-10-01T00:00:00-03:00', $stored);
 		// Compare the local plan value with its UTC equivalent; native persistence is covered separately.

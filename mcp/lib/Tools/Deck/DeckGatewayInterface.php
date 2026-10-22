@@ -242,7 +242,7 @@ interface DeckGatewayInterface extends DependencyNodeSource {
 	 * @param int $stackId Stack that receives the card.
 	 * @param string $title Card title.
 	 * @param string $description Card description, possibly empty.
-	 * @param string|null $duedate Due date as `YYYY-MM-DD` (midnight for the caller), or null for no date.
+	 * @param string|null $duedate Calendar day, account-local time or offset instant; normalized to UTC Z for Deck, or null.
 	 * @param int|null $order Position in the stack, or null to go after the last card.
 	 * @return Card Created card.
 	 * @throws \Throwable Any Deck failure; the caller maps it with {@see DeckErrors}.
@@ -256,8 +256,8 @@ interface DeckGatewayInterface extends DependencyNodeSource {
 	 * @param Card $card Card as previously read, source of the fields the caller did not change.
 	 * @param string $title New title.
 	 * @param string $description New description.
-	 * @param string|null $duedate New due date as `YYYY-MM-DD` (midnight for the caller), the current
-	 *     ISO 8601 instant to keep it untouched, or null to clear it.
+	 * @param string|null $duedate Calendar day, account-local time or offset instant (including the current instant),
+	 *     normalized to UTC Z for Deck, or null to clear it.
 	 * @return Card Updated card.
 	 * @throws \Throwable Any Deck failure; the caller maps it with {@see DeckErrors}.
 	 */

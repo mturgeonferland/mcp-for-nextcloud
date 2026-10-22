@@ -118,7 +118,7 @@ final class CardFormatterTest extends TestCase {
 		)));
 		self::assertSame([
 			'id', 'stackId', 'boardId', 'title', 'description', 'type', 'owner', 'order', 'archived', 'done',
-			'duedate', 'lastModified', 'assignedUsers', 'overdue', 'url',
+			'duedate', 'dueAt', 'lastModified', 'assignedUsers', 'overdue', 'url',
 		], array_keys($formatted));
 	}
 
@@ -132,6 +132,7 @@ final class CardFormatterTest extends TestCase {
 		$formatted = $this->formatter->card($this->card());
 
 		self::assertNull($formatted['duedate']);
+		self::assertNull($formatted['dueAt']);
 		self::assertNull($formatted['done']);
 		self::assertNull($formatted['url']);
 	}

@@ -13,6 +13,7 @@ use OCA\Deck\Db\Assignment;
 use OCA\Deck\NoPermissionException;
 use OCA\Deck\StatusException;
 use OCA\Mcp\Tools\ArgumentValidationException;
+use OCA\Mcp\Tools\Deck\CardDueDateMessages;
 use OCA\Mcp\Tools\Deck\CardFormatter;
 use OCA\Mcp\Tools\Deck\DeckGatewayInterface;
 use OCA\Mcp\Tools\Deck\DeckMessages;
@@ -166,7 +167,7 @@ final class EditCardHandlerTest extends TestCase {
 		$handler = $this->handler();
 
 		$this->expectException(InvalidArgumentException::class);
-		$this->expectExceptionMessage(DeckMessages::errorInvalidDuedate());
+		$this->expectExceptionMessage(CardDueDateMessages::invalid());
 
 		$handler->handle(['cardId' => 7, 'duedate' => '31/12/2026'], 'alice');
 	}
@@ -456,5 +457,22 @@ final class EditCardHandlerTest extends TestCase {
 
 		self::assertArrayNotHasKey('assigned', $payload);
 		self::assertArrayNotHasKey('failed', $payload);
+	}
+
+	/**
+	 * A lost update response is confirmed only for the exact requested instant, not mere date presence.
+	 *
+	 * @return void
+	 */
+	public function testSavedEditComparesTheFullInstant(): void {
+		$gateway = $this->gatewayOwnedBy('alice');
+		$handler = new EditCardHandler($gateway, $this->createMock(LoggerInterface::class), $this->cardFormatter());
+		$before = $this->card(['id' => 7, 'title' => 'Card', 'description' => '', 'lastModified' => 10]);
+		$saved = $this->card(['id' => 7, 'title' => 'Card', 'description' => '', 'lastModified' => 11, 'duedate' => new \DateTime('2026-10-01T18:30:19Z')]);
+		$gateway->method('cardState')->willReturn($saved);
+		$method = new \ReflectionMethod(EditCardHandler::class, 'savedEdit');
+		self::assertSame($saved, $method->invoke($handler, 'alice', $before, 'Card', '', '2026-10-01T15:30:19-03:00'));
+		self::assertNull($method->invoke($handler, 'alice', $before, 'Card', '', '2026-10-01T15:30:20-03:00'));
+		self::assertNull($method->invoke($handler, 'alice', $before, 'Card', '', null));
 	}
 }

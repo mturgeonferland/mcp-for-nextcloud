@@ -538,19 +538,15 @@ final class DeckPlanRenderer {
 		return $names;
 	}
 
+	/**
+	 * Delegate deadline text and timezone disambiguation to its focused display boundary.
+	 *
+	 * @param string $raw Deadline stored in the plan.
+	 * @param \DateTimeZone $zone Account timezone.
+	 * @return string Safe deadline text.
+	 */
 	private function formatDate(string $raw, \DateTimeZone $zone): string {
-		try {
-			if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw)) {
-				return $raw;
-			}
-			$dt = (new \DateTimeImmutable($raw))->setTimezone($zone);
-			if ($dt->format('H:i:s') === '00:00:00') {
-				return $dt->format('Y-m-d');
-			}
-			return $dt->format('Y-m-d H:i');
-		} catch (\Throwable) {
-			return PlanText::inline($raw);
-		}
+		return CardDueDateView::formatPlan($raw, $zone);
 	}
 
 	private function truncate(string $text): string {

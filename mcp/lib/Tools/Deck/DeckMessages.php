@@ -72,7 +72,7 @@ final class DeckMessages {
 	public const PARAM_DUE_BEFORE = 'Returns only cards due on or before this date, in YYYY-MM-DD format.';
 	public const PARAM_TITLE = 'Card title.';
 	public const PARAM_DESCRIPTION = 'Card description, in plain text.';
-	public const PARAM_DUEDATE = 'Due date in YYYY-MM-DD format, or null to remove it.';
+	public const PARAM_DUEDATE = CardDueDateMessages::INPUT_DESCRIPTION;
 	public const PARAM_LIMIT = 'Maximum number of cards to return.';
 	public const PARAM_LABEL_LIMIT = 'Maximum number of labels to return.';
 	public const PARAM_LABEL_OFFSET = 'Number of labels to skip.';
@@ -312,14 +312,6 @@ final class DeckMessages {
 	 */
 	public static function errorNoFieldToEdit(): string {
 		return Translator::t('Provide at least one field to edit: title, description, duedate, assign or unassign.');
-	}
-
-	/**
-	 * Raised when a date is not a real calendar date in YYYY-MM-DD form.
-	 * @return string The message in the language of the current user.
-	 */
-	public static function errorInvalidDuedate(): string {
-		return Translator::t('The due date must be a valid date in YYYY-MM-DD format.');
 	}
 
 	/**

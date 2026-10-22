@@ -80,12 +80,12 @@ final class CardDueDateTest extends TestCase {
 	}
 
 	/**
-	 * The public validator still refuses a timestamp; hour support belongs to the later DK-7 item.
+	 * The separate dueBefore filter remains date-only even though deadlines now accept time.
 	 *
 	 * @return void
 	 */
-	public function testPublicInputStillRejectsAnHour(): void {
+	public function testDueBeforeStillRejectsAnHour(): void {
 		$this->expectException(InvalidArgumentException::class);
-		CardInput::duedate('2026-10-01T15:30:00Z');
+		CardInput::dueBefore('2026-10-01T15:30:00Z');
 	}
 }

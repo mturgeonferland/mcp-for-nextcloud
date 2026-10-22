@@ -903,8 +903,8 @@ final class DeckServiceGateway implements DeckGatewayInterface {
 	 * Delegate calendar-day interpretation and UTC native storage to the focused date boundary.
 	 *
 	 * @param string $userId UID whose account timezone interprets the day.
-	 * @param string|null $duedate Validated calendar day, existing native instant, or null.
-	 * @return string|null UTC with Z for a calendar day or preserved native instant, or null.
+	 * @param string|null $duedate Validated calendar day, account-local time, offset instant, or null.
+	 * @return string|null UTC with Z for every supported deadline or preserved native instant, or null.
 	 */
 	private function instant(string $userId, ?string $duedate): ?string {
 		return CardDueDate::forDeck($duedate, $this->zone($userId));

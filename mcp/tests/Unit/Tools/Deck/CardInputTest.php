@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Mcp\Tests\Unit\Tools\Deck;
 
 use InvalidArgumentException;
+use OCA\Mcp\Tools\Deck\CardDueDateMessages;
 use OCA\Mcp\Tools\Deck\CardInput;
 use OCA\Mcp\Tools\Deck\DeckMessages;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -80,7 +81,7 @@ final class CardInputTest extends TestCase {
 	#[DataProvider('invalidDateProvider')]
 	public function testInvalidDateIsRejected(string $value): void {
 		$this->expectException(InvalidArgumentException::class);
-		$this->expectExceptionMessage(DeckMessages::errorInvalidDuedate());
+		$this->expectExceptionMessage(CardDueDateMessages::invalid());
 
 		CardInput::duedate($value);
 	}

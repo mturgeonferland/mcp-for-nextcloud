@@ -21,7 +21,7 @@ final class CardInput {
 	/** A description longer than this is refused instead of silently truncated. */
 	public const MAX_DESCRIPTION_LENGTH = 100000;
 
-	/** Format accepted for `duedate`, matching the Deck `duedate` column. */
+	/** Day-only format retained for the independent dueBefore filter. */
 	private const DATE_FORMAT = 'Y-m-d';
 
 	/**
@@ -77,14 +77,15 @@ final class CardInput {
 	}
 
 	/**
-	 * Validates a due date.
+	 * Validate a deadline through its focused account-aware parser.
 	 *
-	 * @param mixed $value Raw value: a `YYYY-MM-DD` string or null to clear the date.
-	 * @return string|null The date, or null when there is none.
-	 * @throws InvalidArgumentException When the string is not a real calendar date.
+	 * @param mixed $value Calendar day, supported local/offset timestamp, or null to clear it.
+	 * @param \DateTimeZone|null $zone Account timezone for input without an offset.
+	 * @return string|null Validated spelling, or null when there is none.
+	 * @throws InvalidArgumentException When a date or date-time has an unsupported format, invalid fields or a nonexistent local time.
 	 */
-	public static function duedate(mixed $value): ?string {
-		return self::date($value, DeckMessages::errorInvalidDuedate());
+	public static function duedate(mixed $value, ?\DateTimeZone $zone = null): ?string {
+		return CardDueDate::validate($value, $zone);
 	}
 
 	/**

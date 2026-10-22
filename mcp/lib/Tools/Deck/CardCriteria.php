@@ -98,20 +98,6 @@ final class CardCriteria {
 	}
 
 	/**
-	 * Local midnight used to compare and display a calendar day in an existing plan.
-	 *
-	 * Native writes use CardDueDate::forDeck instead: Deck's datetime binding discards offsets.
-	 * This helper remains local so an unchanged plan instant keeps the account's spelling.
-	 *
-	 * @param string $day Validated YYYY-MM-DD calendar day.
-	 * @param \DateTimeZone $zone Timezone of the account.
-	 * @return string Local-midnight ISO 8601 value with the account's offset, for plans only.
-	 */
-	public static function localMidnight(string $day, \DateTimeZone $zone): string {
-		return CardDueDate::midnight($day, $zone)->format(\DateTimeInterface::ATOM);
-	}
-
-	/**
 	 * UIDs of the people assigned to a card.
 	 *
 	 * Deck stores user, group and circle assignments in the same table (`Acl::PERMISSION_TYPE_*`);

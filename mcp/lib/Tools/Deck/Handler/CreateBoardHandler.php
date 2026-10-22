@@ -34,10 +34,13 @@ final class CreateBoardHandler extends AbstractHandler {
 	public const TOOL = 'deck_create_board';
 
 	/**
+	 * Bind the blueprint validator to the same account timezone used by the native gateway.
+	 *
 	 * @param DeckGatewayInterface $gateway Deck access, the only door to the Deck app.
 	 * @param LoggerInterface $logger Receives tool name and exception class on failure.
+	 * @param \DateTimeZone|null $zone Account timezone for local deadlines; default timezone in isolated tests.
 	 */
-	public function __construct(DeckGatewayInterface $gateway, LoggerInterface $logger) {
+	public function __construct(DeckGatewayInterface $gateway, LoggerInterface $logger, private ?\DateTimeZone $zone = null) {
 		parent::__construct($gateway, $logger);
 	}
 
@@ -53,7 +56,7 @@ final class CreateBoardHandler extends AbstractHandler {
 	 * @throws \InvalidArgumentException When any part of the structure is refused, before anything is written.
 	 */
 	public function handle(array $arguments, string $userId): array {
-		$blueprint = BoardBlueprint::parse($arguments, $userId);
+		$blueprint = BoardBlueprint::parse($arguments, $userId, $this->zone);
 
 		return $this->run(function () use ($blueprint, $userId): array {
 			// The one step whose failure is a plain error: until it succeeds nothing exists. Deck inserts the board

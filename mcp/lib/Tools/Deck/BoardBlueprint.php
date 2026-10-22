@@ -36,12 +36,15 @@ final class BoardBlueprint {
 	}
 
 	/**
+	 * Validate the complete blueprint before any resource is created.
+	 *
 	 * @param array<string, mixed> $arguments Arguments of `deck_create_board`, already passed against the schema.
 	 * @param string $userId UID of the caller, the owner of the board and the only account with access to it.
+	 * @param \DateTimeZone|null $zone Account timezone; default timezone when absent.
 	 * @return array{title: string, color: string, colorGiven: bool, stacks: list<array{title: string, cards: list<array{title: string, description: string, duedate: string|null, assignees: list<string>}>}>, cardCount: int}
 	 * @throws ArgumentValidationException Naming the field when anything of the structure is refused.
 	 */
-	public static function parse(array $arguments, string $userId): array {
+	public static function parse(array $arguments, string $userId, ?\DateTimeZone $zone = null): array {
 		$title = self::title((string)($arguments['title'] ?? ''), 'title');
 		$colorGiven = array_key_exists('color', $arguments) && $arguments['color'] !== null;
 		$color = $colorGiven ? self::color((string)$arguments['color']) : self::DEFAULT_COLOR;
@@ -58,7 +61,7 @@ final class BoardBlueprint {
 			$path = 'stacks[' . $s . ']';
 			$cards = [];
 			foreach (is_array($rawStack['cards'] ?? null) ? $rawStack['cards'] : [] as $c => $rawCard) {
-				$cards[] = self::card($rawCard, $path . '.cards[' . $c . ']', $userId);
+				$cards[] = self::card($rawCard, $path . '.cards[' . $c . ']', $userId, $zone);
 			}
 			$cardCount += count($cards);
 			$stacks[] = ['title' => self::title((string)($rawStack['title'] ?? ''), $path . '.title'), 'cards' => $cards];
@@ -73,13 +76,16 @@ final class BoardBlueprint {
 	}
 
 	/**
+	 * Validate one card, including the deadline in the account timezone.
+	 *
 	 * @param mixed $raw One element of `cards`.
 	 * @param string $path Path of that element, named in a refusal.
 	 * @param string $userId UID of the caller.
+	 * @param \DateTimeZone|null $zone Account timezone for an offset-free deadline.
 	 * @return array{title: string, description: string, duedate: string|null, assignees: list<string>}
 	 * @throws ArgumentValidationException When any field of the card is refused.
 	 */
-	private static function card(mixed $raw, string $path, string $userId): array {
+	private static function card(mixed $raw, string $path, string $userId, ?\DateTimeZone $zone): array {
 		$raw = is_array($raw) ? $raw : [];
 		$title = trim((string)($raw['title'] ?? ''));
 		if ($title === '' || mb_strlen($title) > 255) {
@@ -92,10 +98,10 @@ final class BoardBlueprint {
 				Translator::t('maximum length %s', [CardInput::MAX_DESCRIPTION_LENGTH]));
 		}
 		try {
-			$duedate = CardInput::duedate($raw['duedate'] ?? null);
-		} catch (\InvalidArgumentException) {
+			$duedate = CardInput::duedate($raw['duedate'] ?? null, $zone);
+		} catch (\InvalidArgumentException $e) {
 			throw new ArgumentValidationException('Invalid argument: ' . $path . '.duedate', $path . '.duedate',
-				Translator::t('expected a valid date in YYYY-MM-DD format'));
+				$e->getMessage());
 		}
 		$assignees = CardInput::assignees($raw['assignees'] ?? [], $path . '.assignees');
 		foreach ($assignees as $uid) {

@@ -87,9 +87,11 @@ final class CardFormatter {
 	}
 
 	/**
+	 * Serialize the card whitelist with account-local date and instant fields.
+	 *
 	 * @param Card $card Card as returned by the Deck services.
 	 * @param int|null $boardId Board the card belongs to, resolved once by the gateway for listings.
-	 * @return array{id: int, stackId: int, boardId: int|null, title: string, description: string, type: string, owner: string, order: int, archived: bool, done: int|null, duedate: string|null, lastModified: int, assignedUsers: list<array{uid: string, displayName: string}>, overdue: bool, url: string|null}
+	 * @return array{id: int, stackId: int, boardId: int|null, title: string, description: string, type: string, owner: string, order: int, archived: bool, done: int|null, duedate: string|null, dueAt: string|null, lastModified: int, assignedUsers: list<array{uid: string, displayName: string}>, overdue: bool, url: string|null}
 	 */
 	public function card(Card $card, ?int $boardId = null): array {
 		$boardId ??= $card->getRelatedBoard()?->getId();
@@ -114,6 +116,7 @@ final class CardFormatter {
 			'archived' => (bool)$card->getArchived(),
 			'done' => $this->dateToTimestamp($card->getDone()),
 			'duedate' => CardCriteria::dueDay($card, $this->zone),
+			'dueAt' => CardDueDateView::dueAt($card->getDuedate(), $this->zone),
 			'lastModified' => $card->getLastModified(),
 			'assignedUsers' => $assignedUsers,
 			'overdue' => CardCriteria::isOverdue($card, $this->time->getTime(), $this->zone),
@@ -121,6 +124,15 @@ final class CardFormatter {
 				? null
 				: $this->urls->linkToRouteAbsolute(self::CARD_ROUTE, ['boardId' => $boardId, 'cardId' => $card->getId()]),
 		];
+	}
+
+	/**
+	 * Share the account timezone with the bound handler's input validation and read-back comparison.
+	 *
+	 * @return \DateTimeZone Account timezone already used to serialize this handler's cards.
+	 */
+	public function timezone(): \DateTimeZone {
+		return $this->zone;
 	}
 
 	/**

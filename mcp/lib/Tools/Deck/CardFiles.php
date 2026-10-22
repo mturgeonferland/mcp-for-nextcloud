@@ -11,7 +11,6 @@ use OCA\Mcp\Service\GrantPolicy;
 use OCA\Mcp\Service\Scope\FilesAccessGuard;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
-use OCP\Files\NotFoundException;
 use OCP\Share\IShare;
 
 /** Files references have their own Files scope, exclusion tags and native READ boundary, even inside Deck. */
@@ -131,35 +130,14 @@ final class CardFiles {
 
 	/**
 	 * All aliases in the caller's Files tree must pass; a clean alias cannot bypass an excluded one.
+	 *
 	 * @param string $userId Authenticated caller.
 	 * @param int $fileId Stable original node identity.
 	 * @return array{metadata:array,node:File} Visible caller-relative metadata and an internal node for exact raw-share observation.
 	 * @throws \Throwable Policy failure or generic missing/hidden/legacy/folder refusal.
 	 */
 	private function file(string $userId, int $fileId): array {
-		$folder = $this->rootFolder->getUserFolder($userId);
-		try {
-			$nodes = $folder->getById($fileId);
-		} catch (NotFoundException) {
-			throw self::unavailable();
-		}
-		if ($nodes === []) {
-			throw self::unavailable();
-		}
-		foreach ($nodes as $node) {
-			if (!$node instanceof File || !$this->guard->isVisible($node) || !$node->isReadable()
-				|| (int)$node->getId() !== $fileId) {
-				throw self::unavailable();
-			}
-		}
-		usort($nodes, static fn (File $a, File $b): int => $a->getPath() <=> $b->getPath());
-		$node = $nodes[0];
-		$path = $folder->getRelativePath($node->getPath());
-		if ($path === null) {
-			throw self::unavailable();
-		}
-		return ['node' => $node, 'metadata' => ['fileId' => $fileId, 'name' => $node->getName(), 'path' => $path,
-			'size' => (int)$node->getSize(), 'etag' => $node->getEtag(), 'owner' => $node->getOwner()?->getUID() ?? '']];
+		return (new CardFileNodeAccess($this->guard, $this->rootFolder))->resolve($userId, $fileId);
 	}
 
 	/**

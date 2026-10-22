@@ -130,6 +130,7 @@ final class ToolPresentation {
             'deck_list_cards' => Translator::t('List Deck cards'),
             'deck_list_card_files' => Translator::t('List Deck card files'),
             'deck_unlink_card_file' => Translator::t('Unlink Deck card file'),
+            'deck_link_card_file' => Translator::t('Link file to Deck card'),
             'deck_add_card_dependency' => Translator::t('Add Deck card dependency'),
             'deck_remove_card_dependency' => Translator::t('Remove Deck card dependency'),
             'deck_read_card_dependencies' => Translator::t('Read Deck card dependencies'),

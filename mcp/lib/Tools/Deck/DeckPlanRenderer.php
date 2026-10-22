@@ -20,6 +20,8 @@ final class DeckPlanRenderer {
 	}
 
 	/**
+	 * Dispatch an authorized Deck plan to its focused human-readable renderer.
+	 *
 	 * @param string $tool Tool name
 	 * @param array<string, mixed> $plan Write plan
 	 * @return string|null Markdown body, or null to fall back to generic
@@ -28,6 +30,7 @@ final class DeckPlanRenderer {
 		try {
 			$zone = $this->resolveZone($plan);
 			return match ($tool) {
+				'deck_link_card_file' => CardLinkPlan::render($plan),
 				'deck_unlink_card_file' => $this->renderUnlinkFile($plan),
 				'deck_add_card_dependency', 'deck_remove_card_dependency' => $this->renderDependency($plan),
 				'deck_edit_card_labels' => $this->renderLabels($plan),

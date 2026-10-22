@@ -130,6 +130,7 @@ final class DeckToolModuleTest extends TestCase {
 			'deck_list_labels',
 			'deck_list_card_files',
 			'deck_unlink_card_file',
+			'deck_link_card_file',
 			'deck_edit_card_labels',
 			'deck_list_stacks',
 			'deck_list_cards',

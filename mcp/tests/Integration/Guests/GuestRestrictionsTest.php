@@ -192,7 +192,7 @@ final class GuestRestrictionsTest extends IntegrationTestCase {
     public function testNewDeckToolsFollowTheGuestsWhitelistOnBothLogins(): void {
         $policy = Server::get(GrantPolicy::class);
         $policy->setGrant(self::GUEST, 'deck', 'edit', true);
-        $tools = ['deck_list_labels', 'deck_edit_card_labels', 'deck_list_card_files', 'deck_unlink_card_file'];
+        $tools = ['deck_list_labels', 'deck_edit_card_labels', 'deck_list_card_files', 'deck_unlink_card_file', 'deck_link_card_file'];
         $dependencies = ['deck_read_card_dependencies', 'deck_add_card_dependency', 'deck_remove_card_dependency'];
         // The CLI test process loads the same native autoloader that a normal web request boots.
         Server::get(IAppManager::class)->loadApp('deck');

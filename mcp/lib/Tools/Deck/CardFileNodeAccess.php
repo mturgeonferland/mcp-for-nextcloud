@@ -1,0 +1,65 @@
+<?php
+/*
+ * SPDX-FileCopyrightText: 2026 Sintax (Jhonatan Jaworski) <contato@sintax.tech>
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ */
+declare(strict_types=1);
+
+namespace OCA\Mcp\Tools\Deck;
+
+use OCA\Mcp\Service\Scope\FilesAccessGuard;
+use OCP\Files\File;
+use OCP\Files\IRootFolder;
+use OCP\Files\NotFoundException;
+
+/**
+ * One caller-relative file identity and the visibility of every native alias in that caller's tree.
+ */
+final class CardFileNodeAccess {
+	/**
+	 * Receive Files services without resolving any node in the constructor.
+	 *
+	 * @param FilesAccessGuard $guard Existing Files scope, exclusion and native owner-chain boundary.
+	 * @param IRootFolder $root Caller-relative native folder access.
+	 * @return void
+	 */
+	public function __construct(private FilesAccessGuard $guard, private IRootFolder $root) {
+	}
+
+	/**
+	 * Resolve a File only after callers admitted their operation's grants and scope.
+	 *
+	 * A clean alias cannot bypass a hidden alias. No folder, absent or hidden identity is distinguished.
+	 *
+	 * @param string $uid Authenticated caller.
+	 * @param int $fileId Stable original node identity.
+	 * @param bool $share Require native SHARE on every alias for a new link.
+	 * @return array{node:File,metadata:array} Canonical native node and visible caller-relative metadata.
+	 * @throws \Throwable On denied identity, visibility, permission or uncertain resolution.
+	 */
+	public function resolve(string $uid, int $fileId, bool $share = false): array {
+		$folder = $this->root->getUserFolder($uid);
+		try {
+			$nodes = $folder->getById($fileId);
+		} catch (NotFoundException) {
+			throw CardFiles::unavailable();
+		}
+		if ($nodes === []) {
+			throw CardFiles::unavailable();
+		}
+		foreach ($nodes as $node) {
+			if (!$node instanceof File || !$this->guard->isVisible($node) || !$node->isReadable()
+				|| (int)$node->getId() !== $fileId || ($share && !$node->isShareable())) {
+				throw CardFiles::unavailable();
+			}
+		}
+		usort($nodes, static fn (File $a, File $b): int => $a->getPath() <=> $b->getPath());
+		$node = $nodes[0];
+		$path = $folder->getRelativePath($node->getPath());
+		if ($path === null) {
+			throw CardFiles::unavailable();
+		}
+		return ['node' => $node, 'metadata' => ['fileId' => $fileId, 'name' => $node->getName(), 'path' => $path,
+			'size' => (int)$node->getSize(), 'etag' => $node->getEtag(), 'owner' => $node->getOwner()?->getUID() ?? '']];
+	}
+}

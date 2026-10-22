@@ -25,6 +25,7 @@ use OCA\Mcp\Tools\Deck\Handler\DeleteStackHandler;
 use OCA\Mcp\Tools\Deck\Handler\EditCardHandler;
 use OCA\Mcp\Tools\Deck\Handler\EditCardLabelsHandler;
 use OCA\Mcp\Tools\Deck\Handler\FollowupCardsHandler;
+use OCA\Mcp\Tools\Deck\Handler\LinkCardFileHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListBoardsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListCardsHandler;
 use OCA\Mcp\Tools\Deck\Handler\ListLabelsHandler;
@@ -187,6 +188,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				], ['cardId', 'attachmentId']),
 				'module' => self::MODULE, 'operation' => 'edit', 'app' => self::DECK_APP,
 			],
+			CardLinkTool::definition(),
 			[
 				'name' => EditCardLabelsHandler::TOOL,
 				'description' => DeckMessages::TOOL_EDIT_LABELS_DESCRIPTION . DeckMessages::CONFIRM_SHARED_DESCRIPTION,
@@ -495,6 +497,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		}
 		try {
 			$plan = match ($name) {
+				LinkCardFileHandler::TOOL => CardLinkTool::handler($this->container, $this->gateway(), $this->logger, $this->session)->preview($arguments, $userId),
 				CardFileHandler::UNLINK => $this->fileHandler($name, $userId)->preview($arguments, $userId),
 				ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE => $this->dependencyHandler($name, $userId)->preview($arguments, $userId),
 				EditCardLabelsHandler::TOOL => $this->labelHandler($userId)->preview($arguments, $userId),
@@ -909,6 +912,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		$formatter = $this->formatter($userId);
 
 		return match ($name) {
+			LinkCardFileHandler::TOOL => CardLinkTool::handler($this->container, $this->gateway(), $this->logger, $this->session),
 			CardFileHandler::READ, CardFileHandler::UNLINK => $this->fileHandler($name, $userId),
 			ChangeCardDependencyHandler::ADD, ChangeCardDependencyHandler::REMOVE => $this->dependencyHandler($name, $userId),
 			EditCardLabelsHandler::TOOL => $this->labelHandler($userId),

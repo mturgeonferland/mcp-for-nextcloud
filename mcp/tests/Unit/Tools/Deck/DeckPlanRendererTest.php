@@ -305,6 +305,8 @@ final class DeckPlanRendererTest extends TestCase {
 	/** Every write tool of the module renders a plan of its own: none falls back to the generic field list. */
 	public function testEveryWriteToolHasAReadablePlan(): void {
 		$this->assertEveryWriteToolHasAReadablePlan($this->module, [
+			'deck_link_card_file' => ['file' => ['name' => 'report.txt', 'path' => '/report.txt', 'owner' => 'alice', 'size' => 12],
+				'card' => ['title' => 'Card'], 'recipients' => ['total' => 1, 'names' => [['uid' => 'alice', 'name' => 'Alice']]]],
 			'deck_unlink_card_file' => ['file' => ['name' => 'report.txt'], 'card' => ['title' => 'Card'],
 				'createdBy' => 'another-member', 'board' => ['name' => 'Board']],
 			'deck_edit_card_labels' => ['card'=>['title'=>'Card'], 'board'=>['name'=>'Board'],
@@ -393,6 +395,8 @@ final class DeckPlanRendererTest extends TestCase {
 
 	public function testAssigneePlanSurvivesTheHostileTextContract(): void {
 		$this->assertEveryWriteToolHasAReadablePlan($this->module, [
+			'deck_link_card_file' => ['file' => ['name' => 'report.txt', 'path' => '/report.txt', 'owner' => 'alice', 'size' => 12],
+				'card' => ['title' => 'Card'], 'recipients' => ['total' => 1, 'names' => [['uid' => 'alice', 'name' => 'Alice']]]],
 			'deck_unlink_card_file' => ['file' => ['name' => 'report.txt'], 'card' => ['title' => 'Card'],
 				'createdBy' => 'another-member', 'board' => ['name' => 'Board']],
 			'deck_edit_card_labels' => ['card'=>['title'=>'Card'], 'board'=>['name'=>'Board'],

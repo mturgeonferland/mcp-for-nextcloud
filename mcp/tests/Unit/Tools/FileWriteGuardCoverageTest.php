@@ -39,7 +39,7 @@ final class FileWriteGuardCoverageTest extends TestCase {
 			'Tools/Calendar/EmbeddedDavDispatcher.php#move:literal-move:1' => 'label: DAV HTTP verb; actual dispatcher is classified separately',
 
 			'Controller/CheckoutController.php#send:fopen:1' => 'read: existing file download stream',
-			'Controller/CheckoutWriteHandler.php#create:fopen:1' => 'read: temporary upload body',
+			'Tools/Files/Handler/CheckoutWriteHandler.php#create:fopen:1' => 'read: temporary upload body',
 			'Controller/CheckoutController.php#storeBody:fopen:1' => 'temporary: ITempManager upload body, not a Files node',
 			'Controller/CheckoutController.php#inputStream:fopen:1' => 'read: php input stream',
 			'Tools/Files/FilesPlanRenderer.php#render:copy:1' => 'render: static plan text, no Files mutation',
@@ -52,7 +52,7 @@ final class FileWriteGuardCoverageTest extends TestCase {
 			'Tools/Calendar/Handler/UpdateEvent.php#prepare:touch:1' => 'DAV: update an in-memory event timestamp, not Files touch',
 			'Service/FileWritePolicy.php#recoverStringType:rollback:1' => 'database: rollback owned configuration repair, not Files',
 
-			'Controller/CheckoutWriteHandler.php#write:putcontent:1' => 'guarded: OCA\Mcp\Tests\Unit\Tools\Files\FileWritePolicyBoundariesTest::testPolicyChangeDuringBackupRefusesContentSinkAndKeepsOriginalAndBackup',
+			'Tools/Files/Handler/CheckoutWriteHandler.php#write:putcontent:1' => 'guarded: OCA\Mcp\Tests\Unit\Tools\Files\FileWritePolicyBoundariesTest::testPolicyChangeDuringBackupRefusesContentSinkAndKeepsOriginalAndBackup',
 			'Tools/Files/FileCreationWriter.php#write:newfile:1' => 'guarded: OCA\Mcp\Tests\Unit\Tools\Files\FileWritePolicyBoundariesTest::testDirectCreationSinkRefusesBeforeNewFile',
 			'Tools/Files/FileCreationWriter.php#write:putcontent:1' => 'guarded: OCA\Mcp\Tests\Unit\Tools\Files\FileWritePolicyBoundariesTest::testCreationRechecksBeforePutContentWithoutDeletingEmptyFile',
 			'Tools/Files/FilesModule.php#call:copy:1' => 'guarded: OCA\\Mcp\\Tests\\Unit\\Tools\\Files\\TreeBatchPolicyTest::testForbiddenDescendantDeniesBothToolsBeforeEffects',

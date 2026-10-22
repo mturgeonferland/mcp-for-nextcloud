@@ -11,11 +11,21 @@ use OCA\Mcp\Tools\Common\FileTypeDenied;
 use OCA\Mcp\Tools\Common\LockWriteFailure;
 use OCA\Mcp\Service\FileWritePolicyUnavailable;
 use OCP\Files\NotFoundException;
-use OCA\Mcp\Tools\Files\{CheckoutService, FileBackup, FileWriteBoundary, FilesMessages};
-use OCA\Mcp\Tools\Common\{NodeAccess, NodeAccessInfo, SharedWriteGuard, PathGuard, LockAwareWrite, FileTypeGuard};
+use OCA\Mcp\Tools\Files\CheckoutService;
+use OCA\Mcp\Tools\Files\FileBackup;
+use OCA\Mcp\Tools\Files\FileWriteBoundary;
+use OCA\Mcp\Tools\Files\FilesMessages;
+use OCA\Mcp\Tools\Common\NodeAccess;
+use OCA\Mcp\Tools\Common\NodeAccessInfo;
+use OCA\Mcp\Tools\Common\SharedWriteGuard;
+use OCA\Mcp\Tools\Common\PathGuard;
+use OCA\Mcp\Tools\Common\LockAwareWrite;
+use OCA\Mcp\Tools\Common\FileTypeGuard;
 use OCA\Mcp\Service\Scope\FilesAccessGuard;
-use OCA\Mcp\Tools\{ToolFailure, ToolResult};
-use OCP\Files\{Folder, File};
+use OCA\Mcp\Tools\ToolFailure;
+use OCA\Mcp\Tools\ToolResult;
+use OCP\Files\Folder;
+use OCP\Files\File;
 
 /** Owns files_checkout planning and link emission for the resolved current node. */
 final class CheckoutFileHandler {

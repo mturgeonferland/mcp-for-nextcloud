@@ -23,10 +23,10 @@ final class FileTypePolicyFixture {
 	 * @return FileTypeGuard Production evaluator over the mutable fixture backend.
 	 */
 	public function guard(TestCase $test): FileTypeGuard {
-		$config = $test->createMock(IAppConfig::class);
+		$config = $test->getMockBuilder(IAppConfig::class)->disableOriginalConstructor()->getMock();
 		$config->method('hasKey')->willReturnCallback(fn (): bool => $this->raw !== null);
 		$config->method('getValueString')->willReturnCallback(fn (): string => $this->raw ?? '');
-		return new FileTypeGuard(new FileWritePolicy($config, $test->createMock(IDBConnection::class)));
+		return new FileTypeGuard(new FileWritePolicy($config, $test->getMockBuilder(IDBConnection::class)->disableOriginalConstructor()->getMock()));
 	}
 
 	/**

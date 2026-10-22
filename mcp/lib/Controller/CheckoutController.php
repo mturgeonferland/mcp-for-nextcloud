@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace OCA\Mcp\Controller;
 
 use OCA\Mcp\Service\Policy\PolicyUnavailable;
+use OCA\Mcp\Tools\Files\Handler\CheckoutWriteHandler;
 use OCA\Mcp\Checkout\CheckoutToken;
 use OCA\Mcp\Checkout\CheckoutTokenStore;
 use OCA\Mcp\L10n\Translator;

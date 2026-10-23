@@ -2,11 +2,38 @@
 
 All notable changes to the native Nextcloud app (`mcp/`). Versions follow `mcp/appinfo/info.xml`.
 
-## 1.2.0 (unreleased)
+## 1.2.0-rc.1
 
-### File type policy — folder operations (#15)
+Release candidate for testing on Nextcloud 32–35. This candidate is distributed as a package for testing, not as an App Store release.
 
-With a file type policy active, copying a folder checks every file inside it first and refuses the whole copy if any file is not allowed. The copy is then made file by file from that checked list: files another client adds or renames while the copy runs are not copied, and a failure partway leaves a partial copy that is reported and never removed. Moving a folder also checks every file inside it first, but the move itself is a single Nextcloud operation: a file another client adds to the folder in the short time between that check and the move is moved with it.
+### Added
+
+- **Deck ([#9](https://github.com/sintax-tech/mcp-for-nextcloud/issues/9)):** list board labels and add or remove only the requested card labels, preserving the others; list native card dependencies and add or remove them with checks for detectable cycles; list visible files attached to a card, link an existing file or unlink it without deleting the original. Labels and card files work on Nextcloud 32–35; native dependencies require Nextcloud 34 or 35. The tested pairs are NC32/Deck1.16.8, NC33/1.17.7, NC34/1.18.5 and NC35/1.19.0. Unreadable cards and invisible files are omitted without counts or handles. File linking grants read-only access to current and future board, group and team members; the plan states the audience and sharing limits. It refuses guests and sharing policies the native Deck share would bypass. Later membership or policy changes and the gap before creating the native share are not covered by continuous revalidation or automatic revocation.
+- **Deck due time:** create and edit a due date with a time in the account's time zone or an explicit ISO offset. `duedate` remains the local date; `dueAt` returns the instant with the account's offset, or null. The plan shows the time and time-zone name. A local time in a daylight-saving gap is refused; overdue and `dueBefore` stay day-based. Requested by @Lamdarer in [#9](https://github.com/sintax-tech/mcp-for-nextcloud/issues/9).
+- **Optional file type policy ([#15](https://github.com/sintax-tech/mcp-for-nextcloud/issues/15)):** off by default on new installations and upgrades. Administrators enable an allowlist in *Data protection*. It checks the final name and extension, not the file's content or MIME type: it reduces one route for prompt injection, it does not eliminate it. The rule applies to MCP create, upload, checkout upload, edit, replace, version restore, file and folder copy/move, batches, undo, and Notes including partial edits. Administrators are not exempt. Only mandatory internal file and contact backups are exempt; users cannot request that exemption. An unreadable or invalid policy refuses the covered writes.
+- **Partial note edits:** `notes_edit` accepts `append` or a unique `old`/`new` replacement, alongside the existing whole-content mode. The preview returns the diff; confirmation checks the ETag and plan state against the note read again, including content changes with the same ETag. The content modes are mutually exclusive.
+- German and Spanish root READMEs, linked alongside English and Brazilian Portuguese. Earlier 1.1 release notes remain in `HISTORY.md` and `HISTORY.pt-BR.md`.
+
+### Changed
+
+- **Folder copy and move with an active file type policy:** preflight checks every file and refuses the whole operation if any name is denied. A copy uses the validated list and rechecks each file before copying; files added or renamed later are not copied. A failure partway returns an explicit partial receipt and keeps the partial copy. A folder move remains one native Nextcloud move after preflight: a file inserted between that check and the move can travel with it. Undo also follows the current policy and keeps its receipt and data when refused.
+- **Task categories ([#16](https://github.com/sintax-tech/mcp-for-nextcloud/issues/16)):** `tasks_list_tasks` keeps a literal category filter, including labels made only of symbols. An empty result now explains the filter, how to omit it and, when applicable, that completed tasks were not consulted; it does not reveal unseen categories or whether a matching completed task exists.
+- **Snippet replacement:** overlapping matches in `files_replace` are ambiguous too; provide a longer unique snippet. The ambiguity message no longer returns a match count. `old` is limited to 64 KiB in both `files_replace` and the replacement mode of `notes_edit`.
+- **Card output:** `attachmentCount` is no longer returned, so files outside the caller's Files scope or hidden by exclusion tags are not disclosed by a count. References to cards the caller cannot read are omitted from every card producer.
+- The MCP `serverInfo.version` now reports the installed app version rather than a fixed value.
+
+### Fixed
+
+- **Deck date-only deadlines:** the MCP now converts local midnight to UTC before sending it to Deck, which stores the date-time without converting the supplied offset and reads it back as UTC. New date-only deadlines keep the same local day on later read, list and follow-up calls, including accounts west and east of UTC.
+- **OAuth consent ([#13](https://github.com/sintax-tech/mcp-for-nextcloud/issues/13)):** after Allow or Deny, a new document navigates to the validated client callback. This avoids Chromium applying the consent form's Content Security Policy to the callback's subsequent redirects, which could prevent the connection to Mistral. The fix does not broaden allowed form destinations or change app-password authentication.
+- **`files_replace` size preflight:** both preview and confirm reject a reported file size outside the existing read ceiling before reading its content. A storage that understates its size can still return more bytes on that read; this is not a hard cap on every storage read.
+- **Contact backup lock:** on database locking without Redis, the lock key of a contact backup could exceed the backend's 64-character limit. Present since 0.8.0: a second deletion in the same address book could fail until the earlier lock expired. The key now fits the backend limit without changing the backup requirement.
+
+### Existing Deck deadlines
+
+**Date-only deadlines written by earlier MCP versions for accounts west of UTC may appear one day early.** This release does not migrate existing cards: the intended day cannot be recovered reliably from the stored instant. Check affected cards against the day you intended in Deck, then edit the due date explicitly to that day through MCP after updating, or correct it in Deck. Do not add a day to every card indiscriminately: dates entered in Deck or by other clients may already be correct.
+
+Thanks to @marcjoancr for the Deck request and @Lamdarer for requesting due times ([#9](https://github.com/sintax-tech/mcp-for-nextcloud/issues/9)), @florentin68 for the consent report ([#13](https://github.com/sintax-tech/mcp-for-nextcloud/issues/13)), @Beluluz for the file format restriction request ([#15](https://github.com/sintax-tech/mcp-for-nextcloud/issues/15)), and @cidrblock for the task category report ([#16](https://github.com/sintax-tech/mcp-for-nextcloud/issues/16)).
 
 ## 1.1.2
 

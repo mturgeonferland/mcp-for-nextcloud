@@ -179,7 +179,7 @@ final class ToolsListContractTest extends TestCase {
     public function testTitlesFollowTheUsersLanguageAndDescriptionsStayEnglish(): void {
         $expectedTitles = [
             'en' => ['notes_list' => 'List notes', 'deck_read_card' => 'Read Deck card', 'talk_reply' => 'Reply in Talk'],
-            'pt_BR' => ['notes_list' => 'Listar notas', 'deck_read_card' => 'Ler card do Deck', 'talk_reply' => 'Responder no Talk'],
+            'pt_BR' => ['notes_list' => 'Listar notas', 'deck_read_card' => 'Ler cartão do Deck', 'talk_reply' => 'Responder no Talk'],
             'es' => ['notes_list' => 'Listar notas', 'deck_read_card' => 'Leer tarjeta de Deck', 'talk_reply' => 'Responder en Talk'],
         ];
         $descriptions = [];

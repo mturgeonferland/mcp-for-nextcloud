@@ -27,16 +27,16 @@ require_once __DIR__ . '/Stubs/deck_stubs.php';
 final class DeckTranslationTest extends TestCase {
 	/** @var array<string, string> method of DeckMessages and the pt-BR text the app showed before the translation */
 	private const PORTUGUESE = [
-		'errorNotFoundOrForbidden' => 'Card, lista ou quadro não encontrado ou sem permissão.',
-		'errorNotAllowed' => 'Operação não permitida neste board ou card do Deck.',
+		'errorNotFoundOrForbidden' => 'Cartão, lista ou quadro não encontrado ou sem permissão.',
+		'errorNotAllowed' => 'Operação não permitida neste quadro ou cartão do Deck.',
 		'errorInvalid' => 'Dados inválidos para o Deck.',
 		'errorConflict' => 'O item do Deck mudou durante a operação. Tente de novo.',
 		'errorGeneric' => 'Não foi possível concluir a operação no Deck.',
 		'errorNoFieldToEdit' => 'Informe ao menos um campo para editar: title, description, duedate, assign ou unassign.',
 		'errorInvalidDueBefore' => 'A data de dueBefore deve ser uma data válida no formato AAAA-MM-DD.',
 		'errorInvalidStatus' => 'Status inválido para o acompanhamento. Use overdue, open, done ou all.',
-		'errorDescriptionTooLong' => 'A descrição do card excede o tamanho máximo de 100000 caracteres.',
-		'errorTitleRequired' => 'O título do card não pode ficar vazio.',
+		'errorDescriptionTooLong' => 'A descrição do cartão excede o tamanho máximo de 100000 caracteres.',
+		'errorTitleRequired' => 'O título do cartão não pode ficar vazio.',
 		'errorUnknownTool' => 'Ferramenta do Deck desconhecida.',
 		'errorDeckAppUnavailable' => 'O app Deck não está disponível para este usuário.',
 		'errorSessionNotBound' => 'Não foi possível vincular o Deck à conta autenticada. Nada foi alterado; tente de novo.',

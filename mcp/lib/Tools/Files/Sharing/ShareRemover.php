@@ -117,7 +117,7 @@ final class ShareRemover {
         try {
             $this->shareManager->deleteShare($target['share']);
         } catch (\Exception $e) {
-            $this->logger->warning('MCP unshare refused by Nextcloud', ['app' => 'mcp', 'exception_class' => $e::class]);
+            ShareFailureLog::record($this->logger, 'MCP unshare refused by Nextcloud', $e);
             throw new ToolFailure(FilesMessages::unshareRefused());
         }
         return [

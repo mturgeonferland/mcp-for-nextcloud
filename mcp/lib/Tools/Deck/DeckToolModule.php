@@ -130,8 +130,8 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 				. 'they take before finishing may go to the trash with the list or board; it is recoverable there.',
 			CardDueDateMessages::GUIDE_NOTE . ' A card description is capped '
 				. 'at ' . CardInput::MAX_DESCRIPTION_LENGTH . ' characters and a title at 255.',
-			'deck_move_card only changes the position inside the list of the card; moving it to another list or another '
-				. 'board is not something this module does.',
+			'deck_move_card moves a card to another list, including one on another board. Existing permissions apply to '
+				. 'both ends; a shared origin or destination requires confirm_shared: true after asking the user.',
 		];
 		foreach (DeckGuideNotes::lines() as $note) {
 			$notes[] = $note;
@@ -524,10 +524,7 @@ final class DeckToolModule implements ToolModule, PreviewsWrites, ToolGuideNotes
 		} catch (\Throwable $e) {
 			// A preview that fails has to say the same thing the write would say, so the model is not
 			// sent to ask the user about something that cannot happen.
-			$this->logger->warning('MCP Deck plan failed: {tool} ({exception})', [
-				'tool' => $name,
-				'exception' => $e::class,
-			]);
+			DeckFailureLog::plan($this->logger, $name, $e);
 
 			throw new ToolFailure(DeckErrors::messageFor($e));
 		}

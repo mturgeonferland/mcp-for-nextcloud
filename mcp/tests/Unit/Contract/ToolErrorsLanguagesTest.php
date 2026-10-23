@@ -74,7 +74,7 @@ final class ToolErrorsLanguagesTest extends TestCase {
     /** `deck_read_card` against a card the Deck refuses: one message for "not found" and "no permission". */
     private const DECK = [
         'en' => 'Card, list or board not found, or no permission.',
-        'pt_BR' => 'Card, lista ou quadro não encontrado ou sem permissão.',
+        'pt_BR' => 'Cartão, lista ou quadro não encontrado ou sem permissão.',
         'es' => 'Tarjeta, lista o tablero no encontrado, o sin permiso.',
     ];
 

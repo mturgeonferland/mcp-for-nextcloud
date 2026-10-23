@@ -31,7 +31,7 @@ use Psr\Log\LoggerInterface;
 final class TalkTranslationTest extends TestCase {
     /** @var array<string, string> method of Messages and the pt-BR text the app showed before the translation */
     private const PORTUGUESE = [
-        'referenceLabelDeck' => 'Card do Deck',
+        'referenceLabelDeck' => 'Cartão do Deck',
         'referenceLabelCalendar' => 'Evento do Calendar',
         'referenceUntitled' => '(sem título)',
         'conversationNotFound' => 'conversa não encontrada ou sem acesso',

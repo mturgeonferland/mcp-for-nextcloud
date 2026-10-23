@@ -14,6 +14,7 @@ use OCA\Mcp\Service\Policy\PolicyUnavailable;
 use OCA\Mcp\Tools\ArgumentValidationException;
 use OCA\Mcp\Tools\Deck\DeckConflictException;
 use OCA\Mcp\Tools\Deck\DeckErrors;
+use OCA\Mcp\Tools\Deck\DeckFailureLog;
 use OCA\Mcp\Tools\Deck\DeckGatewayInterface;
 use OCA\Mcp\Tools\Deck\DeckMessages;
 use OCA\Mcp\Tools\Deck\DeckRefusalException;
@@ -108,11 +109,7 @@ abstract class AbstractHandler {
 				return DeckResult::ok(['partial' => true, 'message' => $e->getMessage()]);
 			}
 
-			if ($e instanceof DeckConflictException || $e instanceof DeckRefusalException) {
-				$this->logger->warning('MCP Deck tool refused or conflicted: {tool}', $context);
-			} else {
-				$this->logger->error('MCP Deck tool failed: {tool} ({exception})', $context);
-			}
+			DeckFailureLog::operation($this->logger, $this->toolName(), $e);
 
 			return DeckResult::error(DeckErrors::messageFor($e));
 		}

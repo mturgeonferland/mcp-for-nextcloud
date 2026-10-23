@@ -547,7 +547,7 @@ final class ShareWriter {
             }
             return $this->shareManager->createShare($share);
         } catch (\Throwable $e) {
-            $this->logger->warning('MCP share refused by Nextcloud', ['app' => 'mcp', 'exception_class' => $e::class]);
+            ShareFailureLog::record($this->logger, 'MCP share refused by Nextcloud', $e);
             throw new ToolFailure($e instanceof AlreadySharedException ? FilesMessages::shareAlreadyHasAccess() : FilesMessages::shareRefused());
         }
     }

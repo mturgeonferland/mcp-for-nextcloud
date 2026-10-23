@@ -364,7 +364,7 @@ final class DeckPlanRendererTest extends TestCase {
 		$this->assertStringContainsString('- Passa a ser responsável: Paulo Exemplo', $pt);
 		$this->assertStringContainsString('- Deixa de ser responsável: Luís Lima', $pt);
 		$this->assertStringContainsString('- Responsáveis após a alteração: Ana Souza, Paulo Exemplo', $pt);
-		$this->assertStringContainsString('- Ignorado, não é responsável pelo card: nunca', $pt);
+		$this->assertStringContainsString('- Ignorado, não é responsável pelo cartão: nunca', $pt);
 
 		Translator::use(new JsonL10n('es'));
 		$es = (string)$this->renderer->render('deck_edit_card', $this->assigneePlan());

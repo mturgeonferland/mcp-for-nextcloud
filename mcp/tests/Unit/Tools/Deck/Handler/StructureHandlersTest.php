@@ -114,12 +114,17 @@ final class StructureHandlersTest extends TestCase {
 		self::assertSame(['id' => 10, 'boardId' => 4, 'title' => 'Feito', 'deleted' => true], $payload);
 	}
 
-	/** The refusal is a result with its own words and a warning in the log, never an alarm: nothing broke. */
-	public function testDeleteStackWithCardsIsRefusedWithTheCountAndLoggedAsAWarning(): void {
+	/**
+	 * A normal refusal keeps its words and logs at debug because nothing broke.
+	 *
+	 * @return void
+	 */
+	public function testDeleteStackWithCardsIsRefusedWithTheCountAndLoggedAtDebug(): void {
 		$gateway = $this->gateway();
 		$gateway->method('deleteEmptyStack')->willThrowException(DeckRefusalException::stackNotEmpty(3));
 		$this->logger->expects(self::never())->method('error');
-		$this->logger->expects(self::once())->method('warning');
+		$this->logger->expects(self::never())->method('warning');
+		$this->logger->expects(self::once())->method('debug');
 
 		$result = (new DeleteStackHandler($gateway, $this->logger))->handle(['stackId' => 10, 'confirm' => true], 'alice');
 

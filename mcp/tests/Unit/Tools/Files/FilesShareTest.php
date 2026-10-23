@@ -317,6 +317,9 @@ final class FilesShareTest extends FilesToolsTestCase {
         $existing = $this->shares->add(['node' => $this->id('/Documentos/ata.md'), 'with' => 'bruno', 'permissions' => 3,
             'nodeObject' => $this->tree->node('/alice/files/Documentos/ata.md')]);
         $this->shares->failWrite = new AlreadySharedException('Sharing ata.md failed, because this item is already shared with the account Bruno', $existing);
+        $this->shareLogger->expects(self::once())->method('debug')->with('MCP share refused by Nextcloud',
+            ['app' => 'mcp', 'exception_class' => AlreadySharedException::class]);
+        $this->shareLogger->expects(self::never())->method('warning');
         try {
             $this->confirm(['path' => '/Documentos/ata.md', 'with' => 'user:bruno']);
             self::fail('no failure');

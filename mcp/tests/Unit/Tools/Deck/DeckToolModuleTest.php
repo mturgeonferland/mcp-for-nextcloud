@@ -76,6 +76,18 @@ final class DeckToolModuleTest extends TestCase {
 		$this->module = $this->module($container, $this->appManager, $this->createMock(LoggerInterface::class));
 	}
 
+	/**
+	 * Keep the guide consistent with the destination stack accepted by the move tool.
+	 *
+	 * @return void
+	 */
+	public function testMoveGuideDescribesOtherListsAndBoards(): void {
+		$notes = implode(' ', $this->module->guideNotes());
+		self::assertStringContainsString('deck_move_card moves a card to another list, including one on another board.', $notes);
+		self::assertStringContainsString('both ends; a shared origin or destination requires confirm_shared: true', $notes);
+		self::assertStringNotContainsString('only changes the position inside the list', $notes);
+	}
+
 	/** Only creation accepts assignments; schemas and guide expose the supported behavior. */
 	public function testCreationDeclaresAssigneesAndRejectsMalformedAccountIds(): void {
 		$schema = $this->definitionOf(CreateCardHandler::TOOL)['inputSchema'];

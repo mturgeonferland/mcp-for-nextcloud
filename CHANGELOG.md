@@ -2,9 +2,7 @@
 
 All notable changes to the native Nextcloud app (`mcp/`). Versions follow `mcp/appinfo/info.xml`.
 
-## 1.2.0-rc.1
-
-Release candidate for testing on Nextcloud 32–35. This candidate is distributed as a package for testing, not as an App Store release.
+## 1.2.0
 
 ### Added
 
@@ -24,6 +22,9 @@ Release candidate for testing on Nextcloud 32–35. This candidate is distribute
 
 ### Fixed
 
+- **Deck move guide:** the guide now correctly states that `deck_move_card` can move a card to another list, including one on another board, under the existing permissions and confirmation rules.
+- **Brazilian Portuguese Deck wording:** card and board names, plans and messages consistently use “cartão”, “cartões” and “quadro”.
+- **Expected refusals in logs:** expected Deck refusals and already-shared file refusals are logged at debug instead of warning. Partial or uncertain writes still produce warnings; unexpected failures retain their existing warning or error level.
 - **Deck date-only deadlines:** the MCP now converts local midnight to UTC before sending it to Deck, which stores the date-time without converting the supplied offset and reads it back as UTC. New date-only deadlines keep the same local day on later read, list and follow-up calls, including accounts west and east of UTC.
 - **OAuth consent ([#13](https://github.com/sintax-tech/mcp-for-nextcloud/issues/13)):** after Allow or Deny, a new document navigates to the validated client callback. This avoids Chromium applying the consent form's Content Security Policy to the callback's subsequent redirects, which could prevent the connection to Mistral. The fix does not broaden allowed form destinations or change app-password authentication.
 - **`files_replace` size preflight:** both preview and confirm reject a reported file size outside the existing read ceiling before reading its content. A storage that understates its size can still return more bytes on that read; this is not a hard cap on every storage read.
@@ -32,6 +33,10 @@ Release candidate for testing on Nextcloud 32–35. This candidate is distribute
 ### Existing Deck deadlines
 
 **Date-only deadlines written by earlier MCP versions for accounts west of UTC may appear one day early.** This release does not migrate existing cards: the intended day cannot be recovered reliably from the stored instant. Check affected cards against the day you intended in Deck, then edit the due date explicitly to that day through MCP after updating, or correct it in Deck. Do not add a day to every card indiscriminately: dates entered in Deck or by other clients may already be correct.
+
+### Known issues
+
+With the file type policy active, copying a folder that contains Markdown files can log a Nextcloud warning 'Constraint violation while inserting version, retrying with increased timestamp'. It comes from the Text app and file versions in Nextcloud (it also happens without this app when a Markdown file is copied) and does not affect the copied files.
 
 Thanks to @marcjoancr for the Deck request and @Lamdarer for requesting due times ([#9](https://github.com/sintax-tech/mcp-for-nextcloud/issues/9)), @florentin68 for the consent report ([#13](https://github.com/sintax-tech/mcp-for-nextcloud/issues/13)), @Beluluz for the file format restriction request ([#15](https://github.com/sintax-tech/mcp-for-nextcloud/issues/15)), and @cidrblock for the task category report ([#16](https://github.com/sintax-tech/mcp-for-nextcloud/issues/16)).
 

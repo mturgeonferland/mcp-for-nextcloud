@@ -21,7 +21,7 @@ English · [Português (Brasil)](README.pt-BR.md) · [Deutsch](README.de.md) · 
 
 ## What's new in 1.2
 
-**1.2.0-rc.1 is a release candidate for testing.** See [the changelog](CHANGELOG.md#120-rc1) for the full changes and the warning about older Deck deadlines.
+See [the changelog](CHANGELOG.md#120) for the full changes and the warning about older Deck deadlines.
 
 - **Deck:** labels, native card dependencies on Nextcloud 34/35, and visible files attached to cards: link an existing file or unlink it without deleting it. Plans explain read-only access for current and future board members and the limits of later sharing-policy changes. Due dates now accept a time; `dueAt` returns it with your time-zone offset. Labels and card files work on Nextcloud 32–35.
 - **Optional file type policy:** off by default. An administrator can enable allowed extensions in *Data protection*. It applies to MCP writes, including uploads, restores, copies/moves, batches, undo and Notes; mandatory internal backups remain available. It checks names, not content, and does not eliminate prompt injection. Folder copies with the policy active use a checked list and report any partial copy.

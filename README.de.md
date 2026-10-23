@@ -21,7 +21,7 @@ Claude und andere MCP-Clients arbeiten mit deinen Dateien, Notizen, Kalendern, K
 
 ## Neu in 1.2
 
-**1.2.0-rc.1 ist ein Release Candidate zum Testen.** Im [Changelog](CHANGELOG.md#120-rc1) findest du alle Änderungen und den Hinweis zu älteren Deck-Fälligkeiten.
+Im [Changelog](CHANGELOG.md#120) findest du alle Änderungen und den Hinweis zu älteren Deck-Fälligkeiten.
 
 - **Deck:** Labels, native Kartenabhängigkeiten unter Nextcloud 34/35 und sichtbare Dateiverknüpfungen an Karten: Verknüpfe eine vorhandene Datei oder löse die Verknüpfung, ohne das Original zu löschen. Die Vorschau erklärt den Lesezugriff für aktuelle und künftige Board-Mitglieder und die Grenzen späterer Änderungen an Freigaberichtlinien. Fälligkeiten können jetzt eine Uhrzeit enthalten; `dueAt` liefert sie mit dem Offset deiner Zeitzone. Labels und Kartendateien funktionieren unter Nextcloud 32–35.
 - **Optionale Dateitypenrichtlinie:** standardmäßig aus. Die Administration kann erlaubte Endungen unter *Datenschutz* festlegen. Die Regel gilt für MCP-Schreibvorgänge, einschließlich Uploads, Versionswiederherstellung, Kopieren/Verschieben, Stapel, Rückgängigmachen und Notes; verpflichtende interne Sicherungen bleiben möglich. Geprüft wird der Name, nicht der Inhalt; Prompt Injection wird damit nicht ausgeschlossen. Ordnerkopien verwenden bei aktiver Richtlinie eine geprüfte Liste und melden Teilkopien.

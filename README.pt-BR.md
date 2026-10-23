@@ -21,7 +21,7 @@ Deixe o Claude e outros clientes MCP trabalharem com seus arquivos, notas, calen
 
 ## Novidades da 1.2
 
-**A 1.2.0-rc.1 é uma candidata para testes.** Veja [o changelog](CHANGELOG.md#120-rc1) com as mudanças completas e o aviso sobre prazos antigos do Deck.
+Veja [o changelog](CHANGELOG.md#120) com as mudanças completas e o aviso sobre prazos antigos do Deck.
 
 - **Deck:** etiquetas, dependências nativas entre cards no Nextcloud 34/35 e arquivos visíveis vinculados aos cards: vincular um arquivo existente ou desvinculá-lo sem apagar o original. Os planos explicam o acesso de leitura para membros atuais e futuros do quadro e os limites das mudanças posteriores de política de compartilhamento. O prazo agora aceita hora; `dueAt` a devolve com o deslocamento do seu fuso. Etiquetas e arquivos do card funcionam no Nextcloud 32–35.
 - **Política opcional de tipos de arquivo:** desligada por padrão. Um administrador pode liberar extensões em *Proteção de dados*. Vale para as gravações por MCP, inclusive uploads, restauração de versões, cópias/movimentos, lotes, desfazer e Notes; os backups internos obrigatórios continuam disponíveis. A regra examina nomes, não conteúdo, e não elimina prompt injection. A cópia de pasta com a política ativa usa uma lista conferida e informa qualquer cópia parcial.
